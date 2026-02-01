@@ -1,0 +1,256 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Enums para el sistema
+enum UserRole {
+  ADMIN
+  STAFF
+}
+
+enum ProductGender {
+  HOMBRE
+  MUJER
+  NIÑO
+  UNISEX
+}
+
+enum OrderStatus {
+  PENDIENTE
+  PREPARANDO
+  ENVIADO
+  ENTREGADO
+  CANCELADO
+}
+
+enum PaymentStatus {
+  PENDIENTE
+  PAGADO
+  FALLIDO
+  REEMBOLSADO
+}
+
+enum PaymentMethod {
+  TARJETA_CREDITO
+  TARJETA_DEBITO
+  TRANSFERENCIA
+  MERCADO_PAGO
+  EFECTIVO
+}
+
+// Modelo de Usuario para autenticación
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String   // Contraseña hasheada
+  name      String
+  role      UserRole @default(STAFF)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relaciones
+  orderHistories OrderHistory[]
+
+  @@map("users")
+}
+
+// Categorías con jerarquía
+model Category {
+  id           String    @id @default(cuid())
+  name         String    @unique
+  description  String?
+  position     Int       @default(0)
+  isActive     Boolean   @default(true)
+  parentId     String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Relaciones
+  parent     Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children   Category[] @relation("CategoryHierarchy")
+  products   Product[]
+
+  @@map("categories")
+  @@index([parentId])
+}
+
+// Marcas de productos
+model Brand {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  logo        String?  // URL del logo
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relaciones
+  products Product[]
+
+  @@map("brands")
+}
+
+// Productos principales
+model Product {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  gender      ProductGender
+  sku         String?       @unique
+  price       Decimal       @db.Decimal(10, 2)
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Relaciones
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+  brandId    String
+  brand      Brand    @relation(fields: [brandId], references: [id])
+  options    ProductOption[]
+  stocks     Stock[]
+
+  @@map("products")
+}
+
+// Opciones de producto (variantes como talla, color, material)
+model ProductOption {
+  id       String @id @default(cuid())
+  size     String // Ej: "40", "41", "42"
+  color    String // Ej: "Negro", "Blanco", "Rojo"
+  material String? // Ej: "Cuero", "Sintético", "Textil"
+  sku      String? @unique
+  isActive Boolean @default(true)
+
+  // Relaciones
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  stocks    Stock[]
+  orderItems OrderItem[]
+
+  @@map("product_options")
+}
+
+// Inventario de productos
+model Stock {
+  id        String   @id @default(cuid())
+  quantity  Int      @default(0)
+  minStock  Int      @default(5) // Stock mínimo para alerta
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relaciones
+  productId        String
+  product          Product @relation(fields: [productId], references: [id])
+  productOptionId  String
+  productOption    ProductOption @relation(fields: [productOptionId], references: [id])
+
+  @@unique([productId, productOptionId])
+  @@map("stocks")
+}
+
+// Clientes
+model Customer {
+  id          String   @id @default(cuid())
+  uuid        String   @unique // UUID externo del cliente
+  name        String
+  email       String   @unique
+  phone       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relaciones
+  orders Order[]
+
+  @@map("customers")
+}
+
+// Órdenes de compra
+model Order {
+  id             String        @id @default(cuid())
+  orderNumber    String        @unique // Número de orden único
+  total          Decimal       @db.Decimal(10, 2)
+  subtotal       Decimal       @db.Decimal(10, 2)
+  tax            Decimal       @db.Decimal(10, 2) @default(0)
+  shippingCost   Decimal       @db.Decimal(10, 2) @default(0)
+  status         OrderStatus   @default(PENDIENTE)
+  paymentStatus  PaymentStatus @default(PENDIENTE)
+  paymentMethod  PaymentMethod
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  // Relaciones
+  customerId       String
+  customer         Customer @relation(fields: [customerId], references: [id])
+  shippingAddress  ShippingAddress?
+  items            OrderItem[]
+  histories        OrderHistory[]
+
+  @@map("orders")
+}
+
+// Ítems de una orden
+model OrderItem {
+  id       String   @id @default(cuid())
+  quantity Int
+  price    Decimal  @db.Decimal(10, 2) // Precio al momento de la compra
+  createdAt DateTime @default(now())
+
+  // Relaciones
+  orderId         String
+  order           Order @relation(fields: [orderId], references: [id])
+  productOptionId String
+  productOption   ProductOption @relation(fields: [productOptionId], references: [id])
+
+  @@map("order_items")
+}
+
+// Dirección de envío
+model ShippingAddress {
+  id           String   @id @default(cuid())
+  address      String
+  city         String
+  state        String
+  postalCode   String
+  country      String   @default("Argentina")
+  trackingNumber String? @unique // Número de seguimiento
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relaciones
+  orderId String   @unique
+  order   Order   @relation(fields: [orderId], references: [id])
+
+  @@map("shipping_addresses")
+}
+
+// Historial de cambios en las órdenes
+model OrderHistory {
+  id        String   @id @default(cuid())
+  status    OrderStatus
+  notes     String?
+  createdAt DateTime @default(now())
+
+  // Relaciones
+  orderId String
+  order   Order @relation(fields: [orderId], references: [id])
+  adminId String
+  admin   User  @relation(fields: [adminId], references: [id])
+
+  @@map("order_histories")
+}
