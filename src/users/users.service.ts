@@ -9,15 +9,15 @@ export class UsersService {
   constructor(private prisma: PrismaService) {}
 
   async create(createUserDto: CreateUserDto) {
-    const { email, password, ...userData } = createUserDto;
+    const { password, ...userData } = createUserDto;
 
-    // Verificar si el usuario ya existe
+    // Verificar si el email ya existe
     const existingUser = await this.prisma.user.findUnique({
-      where: { email },
+      where: { email: userData.email },
     });
 
     if (existingUser) {
-      throw new ConflictException('El usuario con este email ya existe');
+      throw new ConflictException('El email ya está registrado');
     }
 
     // Hashear la contraseña
@@ -25,9 +25,8 @@ export class UsersService {
 
     const user = await this.prisma.user.create({
       data: {
-        email,
-        password: hashedPassword,
         ...userData,
+        password: hashedPassword,
       },
       select: {
         id: true,
@@ -99,15 +98,22 @@ export class UsersService {
       throw new NotFoundException(`Usuario con ID ${id} no encontrado`);
     }
 
-    // Si se proporciona una nueva contraseña, hashearla
-    let hashedPassword: string | undefined = undefined;
-    if (password) {
-      hashedPassword = await bcrypt.hash(password, 10);
+    // Si se actualiza el email, verificar que no exista
+    if (userData.email && userData.email !== existingUser.email) {
+      const emailExists = await this.prisma.user.findUnique({
+        where: { email: userData.email },
+      });
+
+      if (emailExists) {
+        throw new ConflictException('El email ya está registrado');
+      }
     }
 
-    const updateData: any = { ...userData };
-    if (hashedPassword) {
-      updateData.password = hashedPassword;
+    // Preparar datos de actualización
+    const updateData: any = userData;
+
+    if (password) {
+      updateData.password = await bcrypt.hash(password, 10);
     }
 
     const updatedUser = await this.prisma.user.update({
@@ -128,21 +134,20 @@ export class UsersService {
   }
 
   async remove(id: string) {
-    // Verificar si el usuario existe
-    const existingUser = await this.prisma.user.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { id },
     });
 
-    if (!existingUser) {
+    if (!user) {
       throw new NotFoundException(`Usuario con ID ${id} no encontrado`);
     }
 
-    // Soft delete: desactivar el usuario
+    // Soft delete
     await this.prisma.user.update({
       where: { id },
       data: { isActive: false },
     });
 
-    return { message: 'Usuario desactivado correctamente' };
+    return { message: 'Usuario desactivado exitosamente' };
   }
 }

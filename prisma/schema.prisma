@@ -17,6 +17,7 @@ datasource db {
 enum UserRole {
   ADMIN
   STAFF
+  CLIENTE
 }
 
 enum ProductGender {
@@ -55,12 +56,13 @@ model User {
   email     String   @unique
   password  String   // Contraseña hasheada
   name      String
-  role      UserRole @default(STAFF)
+  role      UserRole? @default(CLIENTE)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relaciones
+  orders        Order[]
   orderHistories OrderHistory[]
 
   @@map("users")
@@ -82,24 +84,9 @@ model Category {
   children   Category[] @relation("CategoryHierarchy")
   products   Product[]
 
-  @@map("categories")
+  @@unique([name, parentId])
   @@index([parentId])
-}
-
-// Marcas de productos
-model Brand {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String?
-  logo        String?  // URL del logo
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relaciones
-  products Product[]
-
-  @@map("brands")
+  @@map("categories")
 }
 
 // Productos principales
@@ -107,18 +94,16 @@ model Product {
   id          String        @id @default(cuid())
   name        String
   description String?
-  gender      ProductGender
   sku         String?       @unique
   price       Decimal       @db.Decimal(10, 2)
+  brandName   String        // Nombre de la marca como string simple
   isActive    Boolean       @default(true)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  // Relaciones
+ // Relaciones
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id])
-  brandId    String
-  brand      Brand    @relation(fields: [brandId], references: [id])
   options    ProductOption[]
   stocks     Stock[]
 
@@ -132,6 +117,8 @@ model ProductOption {
   color    String // Ej: "Negro", "Blanco", "Rojo"
   material String? // Ej: "Cuero", "Sintético", "Textil"
   sku      String? @unique
+  stock    Int    @default(0) // Cantidad en stock
+  minStock Int    @default(5) // Stock mínimo para alerta
   isActive Boolean @default(true)
 
   // Relaciones
@@ -162,49 +149,27 @@ model Stock {
   @@map("stocks")
 }
 
-// Clientes
-model Customer {
-  id          String   @id @default(cuid())
-  uuid        String   @unique // UUID externo del cliente
-  name        String
-  email       String   @unique
-  phone       String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relaciones
-  orders Order[]
-
-  @@map("customers")
-}
-
-// Órdenes de compra
+// Órdenes de compra - Versión Simplificada para Prueba Técnica
 model Order {
   id             String        @id @default(cuid())
-  orderNumber    String        @unique // Número de orden único
+  orderNumber    String        @unique // Número de orden único alfanumérico
   total          Decimal       @db.Decimal(10, 2)
-  subtotal       Decimal       @db.Decimal(10, 2)
-  tax            Decimal       @db.Decimal(10, 2) @default(0)
-  shippingCost   Decimal       @db.Decimal(10, 2) @default(0)
   status         OrderStatus   @default(PENDIENTE)
-  paymentStatus  PaymentStatus @default(PENDIENTE)
-  paymentMethod  PaymentMethod
-  notes          String?
+  paymentMethod  String        // Método de pago (efectivo, tarjeta, etc.)
+  notes          String?       // Notas de la venta
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
-  // Relaciones
-  customerId       String
-  customer         Customer @relation(fields: [customerId], references: [id])
-  shippingAddress  ShippingAddress?
-  items            OrderItem[]
-  histories        OrderHistory[]
+  // Relaciones (opcionales para ventas rápidas)
+  userId         String?       // Cliente opcional
+  user           User?         @relation(fields: [userId], references: [id])
+  items          OrderItem[]
+  histories      OrderHistory[]
 
   @@map("orders")
 }
 
-// Ítems de una orden
+// Ítems de una orden - Versión Simplificada
 model OrderItem {
   id       String   @id @default(cuid())
   quantity Int
@@ -218,25 +183,6 @@ model OrderItem {
   productOption   ProductOption @relation(fields: [productOptionId], references: [id])
 
   @@map("order_items")
-}
-
-// Dirección de envío
-model ShippingAddress {
-  id           String   @id @default(cuid())
-  address      String
-  city         String
-  state        String
-  postalCode   String
-  country      String   @default("Argentina")
-  trackingNumber String? @unique // Número de seguimiento
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  // Relaciones
-  orderId String   @unique
-  order   Order   @relation(fields: [orderId], references: [id])
-
-  @@map("shipping_addresses")
 }
 
 // Historial de cambios en las órdenes

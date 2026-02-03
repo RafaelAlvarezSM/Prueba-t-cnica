@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -8,384 +8,291 @@ export class ProductsService {
   constructor(private prisma: PrismaService) {}
 
   async create(createProductDto: CreateProductDto) {
-    const { name, sku, categoryId, brandId, options, ...productData } = createProductDto;
+    const { parentCategoryName, subCategoryName, options, ...productFields } = createProductDto;
 
-    // Verificar si el producto ya existe (por nombre o SKU)
-    const existingProduct = await this.prisma.product.findFirst({
+    // Verificar SKU único del producto si se proporciona
+    if (productFields.sku) {
+      const existingProduct = await this.prisma.product.findUnique({
+        where: { sku: productFields.sku },
+      });
+      
+      if (existingProduct) {
+        throw new ConflictException(`El SKU '${productFields.sku}' ya está en uso`);
+      }
+    }
+
+    // Validación Previa: Verificar SKUs duplicados en ProductOption
+    if (options && options.length > 0) {
+      const skusToCheck: string[] = options
+        .map(option => option.sku)
+        .filter((sku): sku is string => sku !== undefined && sku !== null && sku !== ''); // Filtrar SKUs no nulos/vacíos
+
+      if (skusToCheck.length > 0) {
+        const existingSkus = await this.prisma.productOption.findMany({
+          where: {
+            sku: {
+              in: skusToCheck,
+            },
+          },
+          select: {
+            sku: true,
+          },
+        });
+
+        if (existingSkus.length > 0) {
+          const duplicateSkus = existingSkus.map(opt => opt.sku);
+          throw new ConflictException(`El SKU ${duplicateSkus[0]} ya está registrado`);
+        }
+      }
+    }
+
+    // Paso 1: Validación de Padre - Buscar categoría raíz por nombre
+    const parentCategory = await this.prisma.category.findFirst({
       where: {
-        OR: [
-          { name },
-          sku ? { sku } : {},
-        ].filter(condition => Object.keys(condition).length > 0),
+        name: parentCategoryName,
+        parentId: null, // Debe ser categoría raíz
+        isActive: true,
       },
     });
 
-    if (existingProduct) {
-      if (existingProduct.name === name) {
-        throw new ConflictException('Ya existe un producto con este nombre');
-      }
-      if (sku && existingProduct.sku === sku) {
-        throw new ConflictException('Ya existe un producto con este SKU');
-      }
+    if (!parentCategory) {
+      throw new NotFoundException(`Categoría padre '${parentCategoryName}' no encontrada. Las categorías válidas son: Hombre, Mujer, Niño, Niña`);
     }
 
-    // Verificar que la categoría exista
-    const category = await this.prisma.category.findUnique({
-      where: { id: categoryId },
-    });
-
-    if (!category) {
-      throw new NotFoundException('Categoría no encontrada');
-    }
-
-    // Verificar que la marca exista
-    const brand = await this.prisma.brand.findUnique({
-      where: { id: brandId },
-    });
-
-    if (!brand) {
-      throw new NotFoundException('Marca no encontrada');
-    }
-
-    // Crear el producto con sus opciones y stock en una transacción
-    const product = await this.prisma.$transaction(async (tx) => {
-      // Crear el producto principal
-      const newProduct = await tx.product.create({
-        data: {
-          name,
-          sku,
-          categoryId,
-          brandId,
-          ...productData,
+    // Paso 2: Gestión de Subcategoría - Upsert usando el índice único
+    const subCategory = await this.prisma.category.upsert({
+      where: {
+        name_parentId: {
+          name: subCategoryName,
+          parentId: parentCategory.id,
         },
-      });
+      },
+      update: {}, // No actualizamos nada si existe
+      create: {
+        name: subCategoryName,
+        parentId: parentCategory.id,
+        position: 1, // Posición para subcategorías
+        isActive: true,
+      },
+    });
 
-      // Crear las opciones del producto y su stock
-      const productOptions = await Promise.all(
-        options.map(async (option) => {
-          // Verificar si el SKU de la opción ya existe
-          if (option.sku) {
-            const existingOption = await tx.productOption.findUnique({
-              where: { sku: option.sku },
-            });
+    // Paso 3 y 4: Creación del Producto y Opciones en una transacción segura
+    const result = await this.prisma.$transaction(async (tx) => {
+      try {
+        // Crear producto
+        const product = await tx.product.create({
+          data: {
+            name: productFields.name,
+            description: productFields.description,
+            sku: productFields.sku,
+            price: parseFloat(productFields.price.toString()),
+            brandName: productFields.brandName,
+            categoryId: subCategory.id,
+            isActive: productFields.isActive,
+          },
+        });
 
-            if (existingOption) {
-              throw new ConflictException(`Ya existe una opción con el SKU ${option.sku}`);
-            }
-          }
-
-          // Crear la opción del producto
-          const newOption = await tx.productOption.create({
-            data: {
-              productId: newProduct.id,
+        // Crear opciones del producto
+        if (options && options.length > 0) {
+          await tx.productOption.createMany({
+            data: options.map((option) => ({
+              productId: product.id,
               size: option.size,
               color: option.color,
               material: option.material,
               sku: option.sku,
-              isActive: option.isActive,
-            },
-          });
-
-          // Crear el stock para esta opción
-          await tx.stock.create({
-            data: {
-              productId: newProduct.id,
-              productOptionId: newOption.id,
-              quantity: option.stock || 0,
+              stock: option.stock || 0,
               minStock: option.minStock || 5,
-              isActive: option.isActive,
-            },
+            })),
           });
+        }
 
-          return newOption;
-        }),
-      );
-
-      return {
-        ...newProduct,
-        options: productOptions,
-      };
+        return product;
+      } catch (error) {
+        // Si algo falla, la transacción se revertirá automáticamente
+        // incluyendo la subcategoría si fue creada en este mismo momento
+        throw error;
+      }
     });
 
-    // Obtener el producto completo con todas las relaciones
-    const completeProduct = await this.prisma.product.findUnique({
-      where: { id: product.id },
-      include: {
-        category: true,
-        brand: true,
-        options: {
-          include: {
-            stocks: true,
-          },
-        },
-        stocks: true,
-      },
-    });
-
-    return completeProduct;
+    // Retornar producto con jerarquía completa
+    return this.findOneWithHierarchy(result.id);
   }
 
   async findAll() {
     return this.prisma.product.findMany({
+      where: { isActive: true },
       include: {
-        category: true,
-        brand: true,
-        options: {
+        category: {
           include: {
-            stocks: true,
+            parent: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
         },
-        stocks: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
+        options: true,
       },
     });
   }
 
   async findOne(id: string) {
     const product = await this.prisma.product.findUnique({
-      where: { id },
+      where: { id, isActive: true },
       include: {
-        category: true,
-        brand: true,
-        options: {
+        category: {
           include: {
-            stocks: true,
-            orderItems: {
-              include: {
-                order: {
-                  select: {
-                    id: true,
-                    orderNumber: true,
-                    status: true,
-                    createdAt: true,
-                  },
-                },
+            parent: {
+              select: {
+                id: true,
+                name: true,
               },
             },
           },
         },
-        stocks: true,
+        options: true,
       },
     });
 
     if (!product) {
-      throw new NotFoundException(`Producto con ID ${id} no encontrado`);
+      throw new NotFoundException('Producto no encontrado');
+    }
+
+    return product;
+  }
+
+  async findAllWithHierarchy() {
+    return this.prisma.product.findMany({
+      where: { isActive: true },
+      include: {
+        category: {
+          include: {
+            parent: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        options: true,
+      },
+    });
+  }
+
+  async findOneWithHierarchy(id: string) {
+    const product = await this.prisma.product.findUnique({
+      where: { id, isActive: true },
+      include: {
+        category: {
+          include: {
+            parent: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+        options: true,
+      },
+    });
+
+    if (!product) {
+      throw new NotFoundException('Producto no encontrado');
     }
 
     return product;
   }
 
   async update(id: string, updateProductDto: UpdateProductDto) {
-    const { name, sku, categoryId, brandId, options, ...productData } = updateProductDto;
-
-    // Verificar si el producto existe
+    // Verificar que el producto exista
     const existingProduct = await this.prisma.product.findUnique({
       where: { id },
-      include: {
-        options: true,
-      },
     });
 
     if (!existingProduct) {
-      throw new NotFoundException(`Producto con ID ${id} no encontrado`);
+      throw new NotFoundException('Producto no encontrado');
     }
 
-    // Verificar conflictos de nombre o SKU
-    if (name || sku) {
-      const conflictProduct = await this.prisma.product.findFirst({
-        where: {
-          AND: [
-            { id: { not: id } },
-            {
-              OR: [
-                name ? { name } : {},
-                sku ? { sku } : {},
-              ].filter(condition => Object.keys(condition).length > 0),
-            },
-          ],
-        },
-      });
-
-      if (conflictProduct) {
-        if (conflictProduct.name === name) {
-          throw new ConflictException('Ya existe otro producto con este nombre');
-        }
-        if (sku && conflictProduct.sku === sku) {
-          throw new ConflictException('Ya existe otro producto con este SKU');
-        }
-      }
-    }
-
-    // Verificar categoría y marca si se proporcionan
-    if (categoryId) {
+    // Si se incluye categoryId, verificar que la categoría exista y no sea raíz
+    if (updateProductDto.categoryId) {
       const category = await this.prisma.category.findUnique({
-        where: { id: categoryId },
+        where: { id: updateProductDto.categoryId },
       });
 
       if (!category) {
         throw new NotFoundException('Categoría no encontrada');
       }
-    }
 
-    if (brandId) {
-      const brand = await this.prisma.brand.findUnique({
-        where: { id: brandId },
-      });
-
-      if (!brand) {
-        throw new NotFoundException('Marca no encontrada');
+      if (!category.parentId) {
+        throw new BadRequestException('Un producto debe pertenecer a una subcategoría, no a una categoría raíz');
       }
     }
 
-    // Actualizar el producto en una transacción
-    const updatedProduct = await this.prisma.$transaction(async (tx) => {
-      // Actualizar datos del producto
-      const product = await tx.product.update({
-        where: { id },
-        data: {
-          name,
-          sku,
-          categoryId,
-          brandId,
-          ...productData,
-        },
-      });
+    // Actualizar producto
+    const updateData: any = {};
+    
+    if (updateProductDto.name !== undefined) updateData.name = updateProductDto.name;
+    if (updateProductDto.description !== undefined) updateData.description = updateProductDto.description;
+    if (updateProductDto.sku !== undefined) updateData.sku = updateProductDto.sku;
+    if (updateProductDto.price !== undefined) updateData.price = parseFloat(updateProductDto.price.toString());
+    if (updateProductDto.brandName !== undefined) updateData.brandName = updateProductDto.brandName;
+    if (updateProductDto.categoryId !== undefined) updateData.categoryId = updateProductDto.categoryId;
+    if (updateProductDto.isActive !== undefined) updateData.isActive = updateProductDto.isActive;
 
-      // Si se proporcionan opciones, actualizarlas
-      if (options) {
-        // Eliminar opciones existentes y sus stocks
-        await tx.stock.deleteMany({
-          where: { productId: id },
-        });
-
-        await tx.productOption.deleteMany({
-          where: { productId: id },
-        });
-
-        // Crear nuevas opciones y sus stocks
-        const newOptions = await Promise.all(
-          options.map(async (option) => {
-            const newOption = await tx.productOption.create({
-              data: {
-                productId: id,
-                size: option.size,
-                color: option.color,
-                material: option.material,
-                sku: option.sku,
-                isActive: option.isActive,
-              },
-            });
-
-            await tx.stock.create({
-              data: {
-                productId: id,
-                productOptionId: newOption.id,
-                quantity: option.stock || 0,
-                minStock: option.minStock || 5,
-                isActive: option.isActive,
-              },
-            });
-
-            return newOption;
-          }),
-        );
-
-        return { ...product, options: newOptions };
-      }
-
-      return product;
-    });
-
-    // Obtener el producto completo actualizado
-    const completeProduct = await this.prisma.product.findUnique({
-      where: { id: updatedProduct.id },
-      include: {
-        category: true,
-        brand: true,
-        options: {
-          include: {
-            stocks: true,
-          },
-        },
-        stocks: true,
-      },
-    });
-
-    return completeProduct;
-  }
-
-  async remove(id: string) {
-    // Verificar si el producto existe
-    const existingProduct = await this.prisma.product.findUnique({
+    const updatedProduct = await this.prisma.product.update({
       where: { id },
+      data: updateData,
       include: {
-        options: {
+        category: {
           include: {
-            stocks: true,
-            orderItems: {
-              include: {
-                order: {
-                  select: {
-                    id: true,
-                    orderNumber: true,
-                    status: true,
-                    createdAt: true,
-                  },
-                },
+            parent: {
+              select: {
+                id: true,
+                name: true,
               },
             },
           },
         },
+        options: true,
       },
+    });
+
+    return updatedProduct;
+  }
+
+  async remove(id: string) {
+    // Verificar que el producto exista
+    const existingProduct = await this.prisma.product.findUnique({
+      where: { id },
     });
 
     if (!existingProduct) {
-      throw new NotFoundException(`Producto con ID ${id} no encontrado`);
+      throw new NotFoundException('Producto no encontrado');
     }
 
-    // Verificar que no tenga órdenes asociadas
-    if (existingProduct.options.some(option => option.orderItems.length > 0)) {
-      throw new ConflictException('No se puede eliminar un producto con órdenes asociadas');
-    }
-
-    // Soft delete: desactivar el producto
-    await this.prisma.product.update({
+    // Soft delete
+    return this.prisma.product.update({
       where: { id },
       data: { isActive: false },
     });
-
-    return { message: 'Producto desactivado correctamente' };
   }
 
   async updateStock(productOptionId: string, quantity: number) {
-    const stock = await this.prisma.stock.findUnique({
-      where: {
-        productId_productOptionId: {
-          productOptionId,
-          productId: (await this.prisma.productOption.findUnique({
-            where: { id: productOptionId },
-            select: { productId: true },
-          }))!.productId,
-        },
-      },
+    const productOption = await this.prisma.productOption.findUnique({
+      where: { id: productOptionId },
     });
 
-    if (!stock) {
-      throw new NotFoundException('Stock no encontrado para esta opción de producto');
+    if (!productOption) {
+      throw new NotFoundException('Opción de producto no encontrada');
     }
 
-    const updatedStock = await this.prisma.stock.update({
-      where: {
-        productId_productOptionId: {
-          productOptionId,
-          productId: stock.productId,
-        },
-      },
-      data: { quantity },
+    return this.prisma.productOption.update({
+      where: { id: productOptionId },
+      data: { stock: quantity },
     });
-
-    return updatedStock;
   }
 }

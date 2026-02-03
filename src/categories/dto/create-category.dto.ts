@@ -4,15 +4,14 @@ import { IsString, IsOptional, IsInt, IsBoolean } from 'class-validator';
 export class CreateCategoryDto {
   @ApiProperty({
     description: 'Nombre de la categoría',
-    example: 'Zapatillas Running',
-    uniqueItems: true,
+    example: 'Hombre',
   })
   @IsString()
   name: string;
 
   @ApiProperty({
     description: 'Descripción de la categoría',
-    example: 'Zapatillas diseñadas para correr',
+    example: 'Calzado para hombres',
     required: false,
   })
   @IsString()
@@ -20,13 +19,13 @@ export class CreateCategoryDto {
   description?: string;
 
   @ApiProperty({
-    description: 'Posición de la categoría en el ordenamiento',
+    description: 'Posición de la categoría en el listado',
     example: 1,
     default: 0,
   })
   @IsInt()
   @IsOptional()
-  position?: number = 0;
+  position?: number;
 
   @ApiProperty({
     description: 'ID de la categoría padre (para jerarquía)',
@@ -44,5 +43,5 @@ export class CreateCategoryDto {
   })
   @IsBoolean()
   @IsOptional()
-  isActive?: boolean = true;
+  isActive?: boolean;
 }

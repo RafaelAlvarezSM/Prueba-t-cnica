@@ -3,123 +3,139 @@ import {
   Get,
   Post,
   Body,
-  Patch,
   Param,
-  Delete,
-  HttpCode,
-  HttpStatus,
-  Request,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
-import { UpdateOrderDto } from './dto/update-order.dto';
 
 @ApiTags('Orders')
-@ApiBearerAuth()
 @Controller('orders')
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Crear una nueva orden' })
+  @ApiOperation({ summary: 'Generar una venta directa' })
   @ApiResponse({
     status: 201,
-    description: 'Orden creada exitosamente',
+    description: 'Venta generada exitosamente',
+    schema: {
+      example: {
+        id: 'cml5rba4i000180uhq6r6cpjh',
+        orderNumber: 'AB1850E7',
+        total: 389.97,
+        status: 'PENDIENTE',
+        paymentMethod: 'EFECTIVO',
+        notes: 'Venta directa de mostrador',
+        createdAt: '2026-02-02T18:00:00.000Z',
+        user: {
+          id: 'cml5rba2k000080uhaobs3zff',
+          name: 'Juan Pérez',
+          email: 'juan@example.com',
+        },
+        items: [
+          {
+            id: 'cml5rba5j000280uhj1x2k3lm',
+            quantity: 3,
+            price: 129.99,
+            productOption: {
+              id: 'cml5l9n100000z0uhf4rczwi8',
+              product: {
+                id: 'cml5k8m200000z0uhf2x1yabc',
+                name: 'Nike Air Max 90',
+                sku: 'NKE-AIR90-001',
+                brandName: 'Nike',
+              },
+            },
+          },
+        ],
+      },
+    },
   })
   @ApiResponse({
     status: 400,
-    description: 'Stock insuficiente o datos inválidos',
+    description: 'Datos de entrada inválidos - Debe seleccionar al menos un producto',
   })
   @ApiResponse({
     status: 404,
-    description: 'Cliente no encontrado',
+    description: 'ProductOptionId o UserId no encontrado',
   })
   create(@Body() createOrderDto: CreateOrderDto) {
     return this.ordersService.create(createOrderDto);
   }
 
   @Get()
-  @ApiOperation({ summary: 'Obtener todas las órdenes' })
+  @ApiOperation({ summary: 'Listar todas las ventas para el dashboard' })
   @ApiResponse({
     status: 200,
-    description: 'Lista de órdenes obtenida exitosamente',
+    description: 'Lista de ventas con nombres de productos y clientes',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          orderNumber: { type: 'string' },
+          total: { type: 'number' },
+          status: { type: 'string' },
+          paymentMethod: { type: 'string' },
+          createdAt: { type: 'string' },
+          user: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              email: { type: 'string' },
+            },
+          },
+          items: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                quantity: { type: 'number' },
+                price: { type: 'number' },
+                productOption: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    product: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string' },
+                        name: { type: 'string' },
+                        sku: { type: 'string' },
+                        brandName: { type: 'string' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
   })
   findAll() {
     return this.ordersService.findAll();
   }
 
-  @Get('statistics')
-  @ApiOperation({ summary: 'Obtener estadísticas de órdenes' })
-  @ApiResponse({
-    status: 200,
-    description: 'Estadísticas obtenidas exitosamente',
-  })
-  getStatistics() {
-    return this.ordersService.getStatistics();
-  }
-
   @Get(':id')
-  @ApiOperation({ summary: 'Obtener una orden por ID' })
+  @ApiOperation({ summary: 'Obtener una venta por ID' })
   @ApiParam({
     name: 'id',
-    description: 'ID de la orden',
-    example: 'cuid123456789',
+    description: 'ID de la venta',
+    example: 'cml5rba4i000180uhq6r6cpjh',
   })
   @ApiResponse({
     status: 200,
-    description: 'Orden encontrada exitosamente',
+    description: 'Venta encontrada exitosamente',
   })
   @ApiResponse({
     status: 404,
-    description: 'Orden no encontrada',
+    description: 'Venta no encontrada',
   })
   findOne(@Param('id') id: string) {
     return this.ordersService.findOne(id);
-  }
-
-  @Patch(':id')
-  @ApiOperation({ summary: 'Actualizar una orden' })
-  @ApiParam({
-    name: 'id',
-    description: 'ID de la orden',
-    example: 'cuid123456789',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Orden actualizada exitosamente',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Orden no encontrada',
-  })
-  update(
-    @Param('id') id: string,
-    @Body() updateOrderDto: UpdateOrderDto,
-    @Request() req: any,
-  ) {
-    // El adminId debería venir del usuario autenticado
-    const adminId = req.user?.id || 'system';
-    return this.ordersService.update(id, updateOrderDto, adminId);
-  }
-
-  @Delete(':id')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Cancelar una orden (soft delete)' })
-  @ApiParam({
-    name: 'id',
-    description: 'ID de la orden',
-    example: 'cuid123456789',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Orden cancelada exitosamente',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Orden no encontrada',
-  })
-  remove(@Param('id') id: string) {
-    return this.ordersService.remove(id);
   }
 }

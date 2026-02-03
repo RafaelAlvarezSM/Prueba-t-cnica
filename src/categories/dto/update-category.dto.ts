@@ -4,7 +4,7 @@ import { IsString, IsOptional, IsInt, IsBoolean } from 'class-validator';
 export class UpdateCategoryDto {
   @ApiProperty({
     description: 'Nombre de la categoría',
-    example: 'Zapatillas Running',
+    example: 'Hombre',
     required: false,
   })
   @IsString()
@@ -13,7 +13,7 @@ export class UpdateCategoryDto {
 
   @ApiProperty({
     description: 'Descripción de la categoría',
-    example: 'Zapatillas diseñadas para correr',
+    example: 'Calzado para hombres',
     required: false,
   })
   @IsString()
@@ -21,7 +21,7 @@ export class UpdateCategoryDto {
   description?: string;
 
   @ApiProperty({
-    description: 'Posición de la categoría en el ordenamiento',
+    description: 'Posición de la categoría en el listado',
     example: 1,
     required: false,
   })

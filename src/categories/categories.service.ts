@@ -2,24 +2,25 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { CategoryResponseDto } from './dto/category-response.dto';
 
 @Injectable()
 export class CategoriesService {
   constructor(private prisma: PrismaService) {}
 
   async create(createCategoryDto: CreateCategoryDto) {
-    const { name, parentId, ...categoryData } = createCategoryDto;
+    const { parentId, ...categoryData } = createCategoryDto;
 
-    // Verificar si la categoría ya existe
+    // Verificar si el nombre ya existe
     const existingCategory = await this.prisma.category.findUnique({
-      where: { name },
+      where: { name: categoryData.name },
     });
 
     if (existingCategory) {
-      throw new ConflictException('La categoría con este nombre ya existe');
+      throw new ConflictException('El nombre de la categoría ya existe');
     }
 
-    // Si se proporciona parentId, verificar que exista
+    // Si hay parentId, verificar que exista
     if (parentId) {
       const parentCategory = await this.prisma.category.findUnique({
         where: { id: parentId },
@@ -32,29 +33,85 @@ export class CategoriesService {
 
     const category = await this.prisma.category.create({
       data: {
-        name,
-        parentId,
         ...categoryData,
+        parentId: parentId || null,
       },
       include: {
-        parent: true,
-        children: true,
+        parent: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        _count: {
+          select: {
+            children: true,
+          },
+        },
       },
     });
 
-    return category;
+    return this.formatCategoryResponse(category);
   }
 
   async findAll() {
-    return this.prisma.category.findMany({
+    const categories = await this.prisma.category.findMany({
       include: {
-        parent: true,
-        children: true,
-        _count: {
+        parent: {
           select: {
-            products: true,
+            id: true,
+            name: true,
           },
         },
+        _count: {
+          select: {
+            children: true,
+          },
+        },
+      },
+      orderBy: [
+        { position: 'asc' },
+        { name: 'asc' },
+      ],
+    });
+
+    return categories.map(category => this.formatCategoryResponse(category));
+  }
+
+  async findAllWithSubcategoriesCount(): Promise<CategoryResponseDto[]> {
+    const categories = await this.prisma.category.findMany({
+      include: {
+        parent: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        _count: {
+          select: {
+            children: true,
+          },
+        },
+      },
+      orderBy: [
+        { position: 'asc' },
+        { name: 'asc' },
+      ],
+    });
+
+    return categories.map(category => this.formatCategoryResponse(category));
+  }
+
+  async findRootCategories() {
+    return this.prisma.category.findMany({
+      where: { 
+        parentId: null,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        position: true,
       },
       orderBy: [
         { position: 'asc' },
@@ -63,16 +120,32 @@ export class CategoriesService {
     });
   }
 
-  async findTree() {
-    // Obtener todas las categorías ordenadas
+  async findChildrenByParent(parentId: string) {
+    return this.prisma.category.findMany({
+      where: { 
+        parentId: parentId,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        position: true,
+      },
+      orderBy: [
+        { position: 'asc' },
+        { name: 'asc' },
+      ],
+    });
+  }
+
+  async findAllTree() {
     const categories = await this.prisma.category.findMany({
       where: { isActive: true },
       include: {
-        parent: true,
-        children: true,
-        _count: {
+        parent: {
           select: {
-            products: true,
+            id: true,
+            name: true,
           },
         },
       },
@@ -82,34 +155,60 @@ export class CategoriesService {
       ],
     });
 
-    // Construir árbol jerárquico
-    const buildTree = (categories: any[], parentId: string | null = null): any[] => {
-      return categories
-        .filter(category => category.parentId === parentId)
-        .map(category => ({
-          ...category,
-          children: buildTree(categories, category.id),
-        }));
-    };
+    return categories.map(category => ({
+      id: category.id,
+      name: category.name,
+      position: category.position,
+      parentName: category.parent?.name || 'Sin categoría padre',
+      parentId: category.parentId,
+      isRoot: !category.parentId,
+    }));
+  }
 
-    return buildTree(categories);
+  async findPrincipalCategories() {
+    return this.prisma.category.findMany({
+      where: { 
+        parentId: null,
+        isActive: true,
+      },
+      include: {
+        children: {
+          where: { isActive: true },
+          orderBy: [
+            { position: 'asc' },
+            { name: 'asc' },
+          ],
+        },
+      },
+      orderBy: [
+        { position: 'asc' },
+        { name: 'asc' },
+      ],
+    });
   }
 
   async findOne(id: string) {
     const category = await this.prisma.category.findUnique({
       where: { id },
       include: {
-        parent: true,
-        children: true,
-        products: {
+        parent: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        children: {
+          where: { isActive: true },
           include: {
-            brand: true,
-            options: true,
+            _count: {
+              select: {
+                children: true,
+              },
+            },
           },
         },
         _count: {
           select: {
-            products: true,
             children: true,
           },
         },
@@ -120,7 +219,7 @@ export class CategoriesService {
       throw new NotFoundException(`Categoría con ID ${id} no encontrada`);
     }
 
-    return category;
+    return this.formatCategoryResponse(category);
   }
 
   async update(id: string, updateCategoryDto: UpdateCategoryDto) {
@@ -135,7 +234,18 @@ export class CategoriesService {
       throw new NotFoundException(`Categoría con ID ${id} no encontrada`);
     }
 
-    // Si se proporciona parentId, verificar que exista y no sea la misma categoría
+    // Si se actualiza el nombre, verificar que no exista
+    if (categoryData.name && categoryData.name !== existingCategory.name) {
+      const nameExists = await this.prisma.category.findUnique({
+        where: { name: categoryData.name },
+      });
+
+      if (nameExists) {
+        throw new ConflictException('El nombre de la categoría ya existe');
+      }
+    }
+
+    // Si hay parentId, verificar que exista y no sea la misma categoría
     if (parentId) {
       if (parentId === id) {
         throw new ConflictException('Una categoría no puede ser su propia padre');
@@ -148,76 +258,78 @@ export class CategoriesService {
       if (!parentCategory) {
         throw new NotFoundException('Categoría padre no encontrada');
       }
-
-      // Verificar que no se cree un ciclo infinito
-      const isDescendant = await this.isDescendant(parentId, id);
-      if (isDescendant) {
-        throw new ConflictException('No se puede establecer como padre a una categoría descendiente');
-      }
     }
 
     const updatedCategory = await this.prisma.category.update({
       where: { id },
       data: {
-        parentId,
         ...categoryData,
+        parentId: parentId !== undefined ? parentId : existingCategory.parentId,
       },
       include: {
-        parent: true,
-        children: true,
+        parent: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        _count: {
+          select: {
+            children: true,
+          },
+        },
       },
     });
 
-    return updatedCategory;
+    return this.formatCategoryResponse(updatedCategory);
   }
 
   async remove(id: string) {
-    // Verificar si la categoría existe
-    const existingCategory = await this.prisma.category.findUnique({
+    const category = await this.prisma.category.findUnique({
       where: { id },
       include: {
-        children: true,
-        products: true,
+        _count: {
+          select: {
+            children: true,
+            products: true,
+          },
+        },
       },
     });
 
-    if (!existingCategory) {
+    if (!category) {
       throw new NotFoundException(`Categoría con ID ${id} no encontrada`);
     }
 
-    // Verificar que no tenga categorías hijas
-    if (existingCategory.children.length > 0) {
-      throw new ConflictException('No se puede eliminar una categoría con subcategorías');
+    // Verificar que no tenga productos o subcategorías activas
+    if (category._count.children > 0 || category._count.products > 0) {
+      throw new ConflictException(
+        'No se puede desactivar la categoría porque tiene productos o subcategorías asociadas'
+      );
     }
 
-    // Verificar que no tenga productos asociados
-    if (existingCategory.products.length > 0) {
-      throw new ConflictException('No se puede eliminar una categoría con productos asociados');
-    }
-
-    // Soft delete: desactivar la categoría
+    // Soft delete
     await this.prisma.category.update({
       where: { id },
       data: { isActive: false },
     });
 
-    return { message: 'Categoría desactivada correctamente' };
+    return { message: 'Categoría desactivada exitosamente' };
   }
 
-  private async isDescendant(ancestorId: string, categoryId: string): Promise<boolean> {
-    const category = await this.prisma.category.findUnique({
-      where: { id: categoryId },
-      include: { parent: true },
-    });
-
-    if (!category || !category.parentId) {
-      return false;
-    }
-
-    if (category.parentId === ancestorId) {
-      return true;
-    }
-
-    return this.isDescendant(ancestorId, category.parentId);
+  private formatCategoryResponse(category: any): CategoryResponseDto {
+    return {
+      id: category.id,
+      name: category.name,
+      description: category.description,
+      position: category.position,
+      isPrincipal: !category.parentId,
+      isActive: category.isActive,
+      parentId: category.parentId,
+      parentCategory: category.parent?.name || null,
+      subcategoriesCount: category._count?.children || 0,
+      createdAt: category.createdAt,
+      updatedAt: category.updatedAt,
+    };
   }
 }

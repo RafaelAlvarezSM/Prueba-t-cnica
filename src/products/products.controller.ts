@@ -20,21 +20,31 @@ export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Crear un nuevo producto con opciones y stock' })
+  @ApiOperation({ summary: 'Crear un nuevo producto con jerarquía dinámica' })
   @ApiResponse({
     status: 201,
-    description: 'Producto creado exitosamente',
+    description: 'Producto creado exitosamente con subcategoría automática',
   })
   @ApiResponse({
     status: 409,
-    description: 'El producto ya existe (nombre o SKU duplicado)',
+    description: 'El SKU del producto ya existe',
   })
   create(@Body() createProductDto: CreateProductDto) {
     return this.productsService.create(createProductDto);
   }
 
+  @Get('hierarchy')
+  @ApiOperation({ summary: 'Obtener todos los productos con jerarquía completa' })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de productos con categoría padre y subcategoría',
+  })
+  findAllWithHierarchy() {
+    return this.productsService.findAllWithHierarchy();
+  }
+
   @Get()
-  @ApiOperation({ summary: 'Obtener todos los productos' })
+  @ApiOperation({ summary: 'Obtener todos los productos con opciones y stock' })
   @ApiResponse({
     status: 200,
     description: 'Lista de productos obtenida exitosamente',
@@ -44,7 +54,7 @@ export class ProductsController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Obtener un producto por ID' })
+  @ApiOperation({ summary: 'Obtener un producto por ID con todas sus opciones' })
   @ApiParam({
     name: 'id',
     description: 'ID del producto',
@@ -63,7 +73,7 @@ export class ProductsController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Actualizar un producto' })
+  @ApiOperation({ summary: 'Actualizar un producto y sus opciones' })
   @ApiParam({
     name: 'id',
     description: 'ID del producto',
@@ -76,6 +86,10 @@ export class ProductsController {
   @ApiResponse({
     status: 404,
     description: 'Producto no encontrado',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'El SKU del producto ya existe',
   })
   update(@Param('id') id: string, @Body() updateProductDto: UpdateProductDto) {
     return this.productsService.update(id, updateProductDto);
@@ -97,16 +111,11 @@ export class ProductsController {
     status: 404,
     description: 'Producto no encontrado',
   })
-  @ApiResponse({
-    status: 409,
-    description: 'El producto tiene órdenes asociadas',
-  })
   remove(@Param('id') id: string) {
     return this.productsService.remove(id);
   }
 
   @Patch(':id/stock/:optionId')
-  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Actualizar stock de una opción de producto' })
   @ApiParam({
     name: 'id',
@@ -124,10 +133,9 @@ export class ProductsController {
   })
   @ApiResponse({
     status: 404,
-    description: 'Producto o opción no encontrada',
+    description: 'Opción de producto no encontrada',
   })
   updateStock(
-    @Param('id') id: string,
     @Param('optionId') optionId: string,
     @Body('quantity') quantity: number,
   ) {

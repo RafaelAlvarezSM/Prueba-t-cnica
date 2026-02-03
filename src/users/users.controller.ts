@@ -27,7 +27,7 @@ export class UsersController {
   })
   @ApiResponse({
     status: 409,
-    description: 'El email ya está en uso',
+    description: 'El email ya está registrado',
   })
   create(@Body() createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
@@ -76,6 +76,10 @@ export class UsersController {
   @ApiResponse({
     status: 404,
     description: 'Usuario no encontrado',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'El email ya está registrado',
   })
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.update(id, updateUserDto);

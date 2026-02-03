@@ -1,92 +1,93 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsEnum, IsNumber, IsArray, ValidateNested, IsOptional } from 'class-validator';
+import { IsString, IsArray, IsOptional, IsNumber, IsPositive, IsUUID, ArrayNotEmpty } from 'class-validator';
 import { Type } from 'class-transformer';
-import { OrderStatus } from './order-status.enum';
-import { PaymentStatus } from './payment-status.enum';
-import { PaymentMethod } from './payment-method.enum';
-import { OrderItemDto } from './order-item.dto';
-import { ShippingAddressDto } from './shipping-address.dto';
+
+export class OrderItemDto {
+  @ApiProperty({
+    description: 'ID de la variante del producto (talla/color específica) - OBLIGATORIO',
+    example: 'cml5l9n100000z0uhf4rczwi8',
+  })
+  @IsString()
+  productOptionId: string;
+
+  @ApiProperty({
+    description: 'Cantidad de esta variante del producto - OBLIGATORIO',
+    example: 2,
+    minimum: 1,
+  })
+  @IsNumber()
+  @IsPositive()
+  quantity: number;
+
+  @ApiProperty({
+    description: 'Precio unitario de esta variante - OBLIGATORIO',
+    example: 129.99,
+    minimum: 0.01,
+  })
+  @IsNumber()
+  @IsPositive()
+  price: number;
+}
 
 export class CreateOrderDto {
   @ApiProperty({
-    description: 'ID del cliente',
-    example: 'cuid123456789',
-  })
-  @IsString()
-  customerId: string;
-
-  @ApiProperty({
-    description: 'Estado de la orden',
-    enum: OrderStatus,
-    example: OrderStatus.PENDIENTE,
-    default: OrderStatus.PENDIENTE,
-  })
-  @IsEnum(OrderStatus)
-  @IsOptional()
-  status?: OrderStatus = OrderStatus.PENDIENTE;
-
-  @ApiProperty({
-    description: 'Estado del pago',
-    enum: PaymentStatus,
-    example: PaymentStatus.PENDIENTE,
-    default: PaymentStatus.PENDIENTE,
-  })
-  @IsEnum(PaymentStatus)
-  @IsOptional()
-  paymentStatus?: PaymentStatus = PaymentStatus.PENDIENTE;
-
-  @ApiProperty({
-    description: 'Método de pago',
-    enum: PaymentMethod,
-    example: PaymentMethod.TARJETA_CREDITO,
-  })
-  @IsEnum(PaymentMethod)
-  paymentMethod: PaymentMethod;
-
-  @ApiProperty({
-    description: 'Costo de envío',
-    example: 10.99,
-    default: 0,
-  })
-  @IsNumber()
-  @IsOptional()
-  shippingCost?: number = 0;
-
-  @ApiProperty({
-    description: 'Impuestos',
-    example: 15.50,
-    default: 0,
-  })
-  @IsNumber()
-  @IsOptional()
-  tax?: number = 0;
-
-  @ApiProperty({
-    description: 'Notas de la orden',
-    example: 'Entregar después de las 18:00',
-    required: false,
-  })
-  @IsString()
-  @IsOptional()
-  notes?: string;
-
-  @ApiProperty({
-    description: 'Items de la orden',
+    description: 'Array de productos a vender - DEBE CONTENER AL MENOS UN PRODUCTO',
     type: [OrderItemDto],
     isArray: true,
+    minItems: 1,
+    example: [
+      {
+        "productOptionId": "cml5l9n100000z0uhf4rczwi8",
+        "quantity": 2,
+        "price": 129.99
+      }
+    ]
   })
   @IsArray()
-  @ValidateNested({ each: true })
+  @ArrayNotEmpty()
   @Type(() => OrderItemDto)
   items: OrderItemDto[];
 
   @ApiProperty({
-    description: 'Dirección de envío',
-    type: ShippingAddressDto,
+    description: 'ID del usuario (opcional para ventas rápidas)',
+    example: 'cml5rba2k000080uhaobs3zff',
     required: false,
   })
-  @ValidateNested()
-  @Type(() => ShippingAddressDto)
   @IsOptional()
-  shippingAddress?: ShippingAddressDto;
+  @IsString()
+  userId?: string;
+
+  @ApiProperty({
+    description: 'Método de pago',
+    example: 'EFECTIVO',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  paymentMethod?: string;
+
+  @ApiProperty({
+    description: 'Notas de la venta',
+    example: 'Venta directa de mostrador',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  // Ejemplo completo para referencia
+  static example() {
+    return {
+      items: [
+        {
+          productOptionId: "cml5l9n100000z0uhf4rczwi8",
+          quantity: 2,
+          price: 129.99
+        }
+      ],
+      userId: "cml5rba2k000080uhaobs3zff",
+      paymentMethod: "EFECTIVO",
+      notes: "Venta directa de mostrador"
+    };
+  }
 }

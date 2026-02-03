@@ -13,6 +13,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { CategoriesService } from './categories.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { CategoryResponseDto } from './dto/category-response.dto';
 
 @ApiTags('Categories')
 @Controller('categories')
@@ -34,23 +35,77 @@ export class CategoriesController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Obtener todas las categorías' })
+  @ApiOperation({ summary: 'Obtener todas las categorías con conteo de subcategorías' })
   @ApiResponse({
     status: 200,
     description: 'Lista de categorías obtenida exitosamente',
+    type: [CategoryResponseDto],
+    schema: {
+      example: [
+        {
+          id: 'cuid123456789',
+          name: 'Hombre',
+          position: 0,
+          isPrincipal: true,
+          isActive: true,
+          parentId: null,
+          subcategoriesCount: 2,
+          parentCategory: 'Principal',
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        },
+        {
+          id: 'cuid987654321',
+          name: 'Basketball',
+          position: 1,
+          isPrincipal: false,
+          isActive: true,
+          parentId: 'cuid123456789',
+          subcategoriesCount: 0,
+          parentCategory: 'Hombre',
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        },
+      ],
+    },
   })
-  findAll() {
-    return this.categoriesService.findAll();
+  findAll(): Promise<CategoryResponseDto[]> {
+    return this.categoriesService.findAllWithSubcategoriesCount();
+  }
+
+  @Get('roots')
+  @ApiOperation({ summary: 'Obtener categorías raíz (para primer selector)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Categorías raíz obtenidas exitosamente',
+  })
+  findRootCategories() {
+    return this.categoriesService.findRootCategories();
+  }
+
+  @Get('children/:parentId')
+  @ApiOperation({ summary: 'Obtener subcategorías de una categoría padre' })
+  @ApiParam({
+    name: 'parentId',
+    description: 'ID de la categoría padre',
+    example: 'cuid123456789',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Subcategorías obtenidas exitosamente',
+  })
+  findChildrenByParent(@Param('parentId') parentId: string) {
+    return this.categoriesService.findChildrenByParent(parentId);
   }
 
   @Get('tree')
-  @ApiOperation({ summary: 'Obtener categorías en formato de árbol jerárquico' })
+  @ApiOperation({ summary: 'Obtener todas las categorías con nombre de padre (para tabla)' })
   @ApiResponse({
     status: 200,
     description: 'Árbol de categorías obtenido exitosamente',
   })
-  findTree() {
-    return this.categoriesService.findTree();
+  findAllTree() {
+    return this.categoriesService.findAllTree();
   }
 
   @Get(':id')

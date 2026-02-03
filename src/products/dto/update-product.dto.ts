@@ -1,13 +1,67 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsEnum, IsNumber, IsBoolean, IsArray, ValidateNested } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsArray, ValidateNested, IsPositive } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ProductGender } from './product-gender.enum';
-import { ProductOptionDto } from './product-option.dto';
+
+export class ProductOptionDto {
+  @ApiProperty({
+    description: 'Talla del producto',
+    example: '42',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  size?: string;
+
+  @ApiProperty({
+    description: 'Color del producto',
+    example: 'Negro',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  color?: string;
+
+  @ApiProperty({
+    description: 'Material del producto',
+    example: 'Cuero',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  material?: string;
+
+  @ApiProperty({
+    description: 'SKU de la opción',
+    example: 'TS-BK-42',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  sku?: string;
+
+  @ApiProperty({
+    description: 'Cantidad en stock',
+    example: 10,
+    required: false,
+  })
+  @IsNumber()
+  @IsOptional()
+  stock?: number;
+
+  @ApiProperty({
+    description: 'Stock mínimo para alerta',
+    example: 5,
+    required: false,
+  })
+  @IsNumber()
+  @IsOptional()
+  minStock?: number;
+}
 
 export class UpdateProductDto {
   @ApiProperty({
     description: 'Nombre del producto',
-    example: 'Zapatilla Running Pro',
+    example: 'Nike Air Max 90',
     required: false,
   })
   @IsString()
@@ -16,7 +70,7 @@ export class UpdateProductDto {
 
   @ApiProperty({
     description: 'Descripción del producto',
-    example: 'Zapatilla profesional para running con tecnología de amortiguación avanzada',
+    example: 'Zapatillas clásicas con tecnología Air',
     required: false,
   })
   @IsString()
@@ -24,18 +78,8 @@ export class UpdateProductDto {
   description?: string;
 
   @ApiProperty({
-    description: 'Género del producto',
-    enum: ProductGender,
-    example: ProductGender.HOMBRE,
-    required: false,
-  })
-  @IsEnum(ProductGender)
-  @IsOptional()
-  gender?: ProductGender;
-
-  @ApiProperty({
     description: 'SKU del producto',
-    example: 'TS-RUN-PRO-001',
+    example: 'TS-NIKE-AM90',
     required: false,
   })
   @IsString()
@@ -43,12 +87,22 @@ export class UpdateProductDto {
   sku?: string;
 
   @ApiProperty({
-    description: 'Precio del producto',
-    example: 89.99,
+    description: 'Nombre de la marca',
+    example: 'Nike',
     required: false,
   })
-  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsString()
   @IsOptional()
+  brandName?: string;
+
+  @ApiProperty({
+    description: 'Precio del producto',
+    example: 129.99,
+    required: false,
+  })
+  @IsNumber()
+  @IsOptional()
+  @IsPositive()
   price?: number;
 
   @ApiProperty({
@@ -61,32 +115,20 @@ export class UpdateProductDto {
   categoryId?: string;
 
   @ApiProperty({
-    description: 'ID de la marca',
-    example: 'cuid987654321',
-    required: false,
-  })
-  @IsString()
-  @IsOptional()
-  brandId?: string;
-
-  @ApiProperty({
     description: 'Estado del producto',
     example: true,
     required: false,
   })
-  @IsBoolean()
   @IsOptional()
   isActive?: boolean;
 
   @ApiProperty({
-    description: 'Opciones del producto (tallas, colores, materiales)',
+    description: 'Opciones del producto (tallas, colores, stock)',
     type: [ProductOptionDto],
-    isArray: true,
     required: false,
   })
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ProductOptionDto)
-  @IsOptional()
   options?: ProductOptionDto[];
 }

@@ -1,8 +1,6 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateUserDto } from './create-user.dto';
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsString, IsEnum, IsOptional } from 'class-validator';
-import { UserRole } from './user-roles.enum';
+import { IsEmail, IsString, IsEnum, IsOptional, MinLength } from 'class-validator';
+import { UserRole } from '../../../generated/prisma/client';
 
 export class UpdateUserDto {
   @ApiProperty({
@@ -15,12 +13,13 @@ export class UpdateUserDto {
   email?: string;
 
   @ApiProperty({
-    description: 'Contraseña del usuario (será hasheada)',
-    example: 'Password123!',
+    description: 'Contraseña del usuario (mínimo 6 caracteres)',
+    example: 'newpassword123',
     required: false,
     minLength: 6,
   })
   @IsString()
+  @MinLength(6)
   @IsOptional()
   password?: string;
 
