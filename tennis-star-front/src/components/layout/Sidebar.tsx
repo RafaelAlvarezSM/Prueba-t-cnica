@@ -34,7 +34,7 @@ interface SidebarItem {
 
 const sidebarItems: SidebarItem[] = [
   {
-    title: 'Inicio',
+    title: 'Dashboard',
     href: '/dashboard',
     icon: Home,
     roles: ['ADMIN', 'STAFF', 'CLIENTE']
@@ -46,70 +46,52 @@ const sidebarItems: SidebarItem[] = [
     roles: ['ADMIN', 'STAFF']
   },
   {
-    title: 'Inventario',
-    href: '/dashboard/inventory',
-    icon: Package,
-    roles: ['ADMIN', 'STAFF']
-  },
-  {
     title: 'Categorías',
     href: '/dashboard/categories',
     icon: Tags,
-    roles: ['ADMIN', 'STAFF']
+    roles: ['ADMIN']
   },
   {
     title: 'Marcas',
     href: '/dashboard/brands',
     icon: Package,
-    roles: ['ADMIN', 'STAFF']
+    roles: ['ADMIN']
   },
   {
     title: 'Productos',
     href: '/dashboard/products',
-    icon: Store,
-    roles: ['ADMIN', 'STAFF']
+    icon: Package,
+    roles: ['ADMIN', 'CLIENTE']
   },
   {
     title: 'Clientes',
     href: '/dashboard/customers',
     icon: Users,
-    roles: ['ADMIN', 'STAFF']
+    roles: ['ADMIN']
   },
   {
     title: 'Estadísticas',
     href: '/dashboard/analytics',
     icon: BarChart3,
-    roles: ['ADMIN', 'STAFF']
+    roles: ['ADMIN']
   },
   {
     title: 'Descuentos',
     href: '/dashboard/discounts',
     icon: Percent,
-    roles: ['ADMIN', 'STAFF']
+    roles: ['ADMIN']
   },
   {
     title: 'Puntos de Lealtad',
     href: '/dashboard/loyalty',
     icon: Gift,
-    roles: ['ADMIN', 'STAFF']
+    roles: ['ADMIN']
   },
   {
     title: 'Membresías',
     href: '/dashboard/memberships',
     icon: CreditCard,
-    roles: ['ADMIN', 'STAFF']
-  },
-  {
-    title: 'Catálogo',
-    href: '/dashboard/catalog',
-    icon: Store,
-    roles: ['ADMIN', 'STAFF', 'CLIENTE']
-  },
-  {
-    title: 'Mis Pedidos',
-    href: '/dashboard/my-orders',
-    icon: ShoppingCart,
-    roles: ['CLIENTE']
+    roles: ['ADMIN']
   },
   {
     title: 'Notificaciones',
@@ -121,7 +103,7 @@ const sidebarItems: SidebarItem[] = [
     title: 'Configuración',
     href: '/dashboard/settings',
     icon: Settings,
-    roles: ['ADMIN', 'STAFF', 'CLIENTE']
+    roles: ['ADMIN']
   },
   {
     title: 'Ayuda',

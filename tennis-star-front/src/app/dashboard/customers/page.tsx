@@ -47,16 +47,16 @@ const mockCustomers = Array.from({ length: 50 }, (_, i) => ({
 }));
 
 export default function CustomersPage() {
-  const { isAdmin, isStaff } = useAuth();
+  const { isAdmin } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [customers] = useState(mockCustomers);
 
-  if (!isAdmin && !isStaff) {
+  if (!isAdmin) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-red-600">Acceso Restringido</h2>
-          <p className="text-muted-foreground mt-2">Esta página está disponible solo para administradores y staff.</p>
+          <p className="text-muted-foreground mt-2">Esta página está disponible solo para administradores.</p>
         </div>
       </div>
     );

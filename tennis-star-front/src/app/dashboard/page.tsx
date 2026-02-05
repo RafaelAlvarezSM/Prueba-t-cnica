@@ -6,268 +6,232 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { 
-  ShoppingCart, 
-  Package, 
-  Users, 
-  DollarSign,
-  TrendingUp,
-  BarChart3,
+  Plus,
   Eye,
-  Activity,
-  Target
+  Package,
+  ShoppingCart,
+  TrendingUp,
+  Bell,
+  Moon,
+  Sun,
+  User
 } from 'lucide-react';
-import { orderService } from '@/services/orderService';
 
-// Datos mock para fallback
-const mockStats = {
-  totalSales: 125430,
-  salesGrowth: 12.5,
-  totalOrders: 3420,
-  ordersGrowth: 8.2,
-  totalProducts: 485,
-  productsGrowth: 5.7,
-  totalCustomers: 8920,
-  customersGrowth: 15.3,
-  recentOrders: [
-    { id: 'ORD-3421', customer: 'Juan Pérez', total: 129.99, status: 'PENDIENTE', time: 'Hace 2 minutos' },
-    { id: 'ORD-3420', customer: 'María García', total: 89.99, status: 'ENVIADO', time: 'Hace 5 minutos' },
-    { id: 'ORD-3419', customer: 'Carlos López', total: 156.50, status: 'ENTREGADO', time: 'Hace 8 minutos' },
-    { id: 'ORD-3418', customer: 'Ana Martínez', total: 234.75, status: 'PENDIENTE', time: 'Hace 15 minutos' },
-    { id: 'ORD-3417', customer: 'Roberto Díaz', total: 78.25, status: 'ENVIADO', time: 'Hace 22 minutos' }
+// Mock data para el dashboard
+const mockInventory = {
+  total: 128,
+  totalValue: 190192.00,
+  products: [
+    { id: 'ID3715', name: 'Tenis Adidas VL Court Base', units: 2 },
+    { id: 'ID3716', name: 'Nike Air Max 90', units: 5 },
+    { id: 'ID3717', name: 'Puma RS-X', units: 3 },
+    { id: 'ID3718', name: 'New Balance 574', units: 8 }
   ]
 };
 
+const mockRecentSales = [
+  {
+    id: 1,
+    customerName: 'Juan Pérez',
+    orderId: 'ORD-2024-001',
+    status: 'Completado',
+    date: '2024-02-05 14:30',
+    amount: 259.99
+  },
+  {
+    id: 2,
+    customerName: 'María García',
+    orderId: 'ORD-2024-002',
+    status: 'En Proceso',
+    date: '2024-02-05 13:15',
+    amount: 189.99
+  },
+  {
+    id: 3,
+    customerName: 'Carlos López',
+    orderId: 'ORD-2024-003',
+    status: 'Completado',
+    date: '2024-02-05 12:45',
+    amount: 129.99
+  },
+  {
+    id: 4,
+    customerName: 'Ana Martínez',
+    orderId: 'ORD-2024-004',
+    status: 'Pendiente',
+    date: '2024-02-05 11:20',
+    amount: 349.99
+  }
+];
+
 export default function DashboardPage() {
   const { user, isAdmin, isStaff, isCliente } = useAuth();
-  const [realStats, setRealStats] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-
-  // Cargar datos reales si es ADMIN o STAFF
-  useEffect(() => {
-    if ((isAdmin || isStaff) && !loading) {
-      loadRealData();
-    }
-  }, [isAdmin, isStaff]);
-
-  const loadRealData = async () => {
-    try {
-      setLoading(true);
-      const orders = await orderService.getOrders();
-      
-      // Calcular estadísticas reales
-      const totalOrders = orders.length;
-      const totalSales = orders.reduce((sum, order) => sum + order.total, 0);
-      const recentOrders = orders.slice(-5).reverse().map(order => ({
-        id: order.orderNumber,
-        customer: order.user?.name || 'Venta directa',
-        total: order.total,
-        status: order.status,
-        time: 'Hace unos minutos'
-      }));
-
-      setRealStats({
-        totalOrders,
-        totalSales,
-        recentOrders
-      });
-    } catch (error) {
-      console.log('Usando datos mock - Error cargando datos reales:', error);
-      // Mantener datos mock si hay error
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Usar datos reales si existen, si no usar mock
-  const stats = realStats || mockStats;
+  const [darkMode, setDarkMode] = useState(false);
 
   // Redirección basada en rol
   useEffect(() => {
     if (isCliente) {
-      window.location.href = '/dashboard/catalog';
+      window.location.href = '/dashboard/products';
     }
   }, [isCliente]);
 
-  if (isCliente) {
+  const getStatusBadge = (status: string) => {
+    const variants = {
+      'Completado': 'default',
+      'En Proceso': 'secondary',
+      'Pendiente': 'outline'
+    } as const;
+
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold">Redirigiendo...</h2>
-          <p className="text-muted-foreground mt-2">Los clientes son redirigidos al catálogo.</p>
-        </div>
-      </div>
+      <Badge variant={variants[status as keyof typeof variants] || 'outline'}>
+        {status}
+      </Badge>
     );
-  }
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold">
-          Bienvenido, {user?.name || 'Usuario'}!
-        </h1>
-        <p className="text-muted-foreground">
-          {isAdmin ? 'Panel de Administración - Vista completa del sistema' : 
-           isStaff ? 'Panel de Ventas - Gestión de órdenes y productos' :
-           'Panel de Control'}
-        </p>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ventas Totales</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${stats.totalSales.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground flex items-center">
-              <TrendingUp className="h-3 w-3 mr-1 text-green-500" />
-              +{mockStats.salesGrowth}% vs mes anterior
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Órdenes Totales</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalOrders.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground flex items-center">
-              <TrendingUp className="h-3 w-3 mr-1 text-green-500" />
-              +{mockStats.ordersGrowth}% vs mes anterior
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Productos</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{mockStats.totalProducts}</div>
-            <p className="text-xs text-muted-foreground flex items-center">
-              <TrendingUp className="h-3 w-3 mr-1 text-green-500" />
-              +{mockStats.productsGrowth}% vs mes anterior
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Clientes</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{mockStats.totalCustomers.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground flex items-center">
-              <TrendingUp className="h-3 w-3 mr-1 text-green-500" />
-              +{mockStats.customersGrowth}% vs mes anterior
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Quick Actions para ADMIN */}
-      {isAdmin && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Acciones Rápidas</CardTitle>
-            <CardDescription>
-              Acciones administrativas más comunes
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <Button variant="outline" className="h-20 flex-col">
-                <ShoppingCart className="h-6 w-6 mb-2" />
-                <span>Nueva Venta</span>
-              </Button>
-              <Button variant="outline" className="h-20 flex-col">
-                <Package className="h-6 w-6 mb-2" />
-                <span>Agregar Producto</span>
-              </Button>
-              <Button variant="outline" className="h-20 flex-col">
-                <Users className="h-6 w-6 mb-2" />
-                <span>Nuevo Cliente</span>
-              </Button>
-              <Button variant="outline" className="h-20 flex-col">
-                <BarChart3 className="h-6 w-6 mb-2" />
-                <span>Ver Estadísticas</span>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Recent Orders */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span className="flex items-center gap-2">
-              <Activity className="h-5 w-5" />
-              Órdenes Recientes
-            </span>
-            <Button variant="outline" size="sm">
-              <Eye className="h-4 w-4 mr-2" />
-              Ver Todas
+    <div className="min-h-screen bg-slate-50">
+      {/* Top Bar */}
+      <div className="bg-white border-b border-gray-200 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold text-gray-900">Inicio</h1>
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="sm">
+              <Bell className="h-5 w-5" />
             </Button>
-          </CardTitle>
-          <CardDescription>
-            Últimas {isAdmin ? 'transacciones' : 'ventas'} registradas
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {stats.recentOrders.map((order: any) => (
-              <div key={order.id} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <ShoppingCart className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="font-medium">{order.id}</p>
-                    <p className="text-sm text-muted-foreground">{order.customer}</p>
-                  </div>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => setDarkMode(!darkMode)}
+            >
+              {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </Button>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                <User className="h-4 w-4 text-white" />
+              </div>
+              <span className="text-sm font-medium">{user?.name}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="p-6">
+        <div className="grid gap-6 lg:grid-cols-3">
+          
+          {/* Inventario de Productos - Izquierda */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">Inventario de Productos</CardTitle>
+                <Package className="h-5 w-5 text-blue-500" />
+              </div>
+              <CardDescription>
+                Gestiona tu stock y productos
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-500">Total Productos</p>
+                  <p className="text-2xl font-bold">{mockInventory.total}</p>
                 </div>
-                <div className="text-right">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Badge 
-                      variant={order.status === 'ENTREGADO' ? 'default' : 
-                               order.status === 'ENVIADO' ? 'secondary' : 'destructive'}
-                    >
-                      {order.status}
-                    </Badge>
-                  </div>
-                  <p className="font-semibold">${order.total}</p>
-                  <p className="text-xs text-muted-foreground">{order.time}</p>
+                <div>
+                  <p className="text-sm text-gray-500">Valor Total</p>
+                  <p className="text-2xl font-bold">${mockInventory.totalValue.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</p>
                 </div>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              
+              <div className="space-y-2">
+                <h4 className="font-medium text-sm">Productos Detallados</h4>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {mockInventory.products.map((product) => (
+                    <div key={product.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                      <div>
+                        <p className="text-sm font-medium">{product.name}</p>
+                        <p className="text-xs text-gray-500">{product.id}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">{product.units} uds.</span>
+                        <Button variant="ghost" size="sm">
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" size="sm" className="flex-1">
+                  <Plus className="h-4 w-4 mr-1" />
+                  Añadir
+                </Button>
+                <Button variant="outline" size="sm" className="flex-1">
+                  <Eye className="h-4 w-4 mr-1" />
+                  Ver Todos
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
-      {/* Data Source Indicator */}
-      <Card className="bg-muted/50">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Target className="h-4 w-4" />
-              <span className="text-sm font-medium">
-                Fuente de Datos: {realStats ? 'Backend Real' : 'Datos Mock'}
-              </span>
-            </div>
-            {loading && (
-              <Badge variant="secondary">Cargando...</Badge>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+          {/* Ventas Recientes - Centro */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">Ventas Recientes</CardTitle>
+                <ShoppingCart className="h-5 w-5 text-green-500" />
+              </div>
+              <CardDescription>
+                Últimas transacciones realizadas
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {mockRecentSales.map((sale) => (
+                <Card key={sale.id} className="p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className="font-medium text-sm">{sale.customerName}</h4>
+                        {getStatusBadge(sale.status)}
+                      </div>
+                      <p className="text-xs text-gray-500">{sale.orderId}</p>
+                      <p className="text-xs text-gray-500">{sale.date}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-green-600">
+                        ${sale.amount.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </CardContent>
+          </Card>
+
+          {/* Productos Más Vendidos - Derecha */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">Productos Más Vendidos</CardTitle>
+                <TrendingUp className="h-5 w-5 text-orange-500" />
+              </div>
+              <CardDescription>
+                Los productos con mayor demanda
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <TrendingUp className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500 font-medium">No hay productos top para mostrar</p>
+                <p className="text-sm text-gray-400">Los productos más vendidos aparecerán aquí</p>
+              </div>
+            </CardContent>
+          </Card>
+
+        </div>
+      </div>
     </div>
   );
 }

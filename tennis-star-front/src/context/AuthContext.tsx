@@ -88,11 +88,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // Redirección basada en rol
       if (userData.role === 'ADMIN') {
-        window.location.href = '/dashboard/inventory';
+        window.location.href = '/dashboard';
       } else if (userData.role === 'STAFF') {
         window.location.href = '/dashboard/sales';
       } else if (userData.role === 'CLIENTE') {
-        window.location.href = '/dashboard/catalog';
+        window.location.href = '/dashboard/products';
       }
     } catch (error: any) {
       console.error('Error en login:', error);
