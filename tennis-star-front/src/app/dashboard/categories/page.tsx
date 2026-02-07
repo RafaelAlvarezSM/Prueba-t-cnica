@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,165 +17,172 @@ import {
   Tag
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 import CategoryModal, { CategoryFormData } from '@/components/modals/CategoryModal';
+import { categoryService, Category } from '@/services/categoryService';
 
-// Mock data para categorías
-const mockCategories = [
-  {
-    id: 1,
-    name: 'Hombre',
-    position: 1,
-    subcategories: 15,
-    parentCategory: null,
-    status: 'active'
-  },
-  {
-    id: 2,
-    name: 'Mujer',
-    position: 2,
-    subcategories: 12,
-    parentCategory: null,
-    status: 'active'
-  },
-  {
-    id: 3,
-    name: 'Niño',
-    position: 3,
-    subcategories: 8,
-    parentCategory: null,
-    status: 'active'
-  },
-  {
-    id: 4,
-    name: 'Niña',
-    position: 4,
-    subcategories: 6,
-    parentCategory: null,
-    status: 'active'
-  },
-  {
-    id: 5,
-    name: 'Running',
-    position: 5,
-    subcategories: 4,
-    parentCategory: 'Hombre',
-    status: 'active'
-  },
-  {
-    id: 6,
-    name: 'Tenis Casual',
-    position: 6,
-    subcategories: 5,
-    parentCategory: 'Hombre',
-    status: 'active'
-  },
-  {
-    id: 7,
-    name: 'Training',
-    position: 7,
-    subcategories: 7,
-    parentCategory: 'Mujer',
-    status: 'active'
-  },
-  {
-    id: 8,
-    name: 'Lifestyle',
-    position: 8,
-    subcategories: 4,
-    parentCategory: 'Mujer',
-    status: 'active'
-  },
-  {
-    id: 9,
-    name: 'Escolar',
-    position: 9,
-    subcategories: 6,
-    parentCategory: 'Niño',
-    status: 'active'
-  },
-  {
-    id: 10,
-    name: 'Deportivo',
-    position: 10,
-    subcategories: 5,
-    parentCategory: 'Niño',
-    status: 'active'
-  },
-  {
-    id: 11,
-    name: 'Escolar',
-    position: 11,
-    subcategories: 4,
-    parentCategory: 'Niña',
-    status: 'active'
-  },
-  {
-    id: 12,
-    name: 'Fashion',
-    position: 12,
-    subcategories: 3,
-    parentCategory: 'Niña',
-    status: 'active'
-  }
-];
 
 export default function CategoriesPage() {
   const { isAdmin } = useAuth();
-  const [categories, setCategories] = useState(mockCategories);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
 
-  useEffect(() => {
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-    }, 1000);
-  }, []);
+  // Query para obtener categorías
+  const { data: categories = [], isLoading, error } = useQuery({
+    queryKey: ['categories'],
+    queryFn: () => categoryService.getCategories(),
+    retry: 3,
+    retryDelay: 1000,
+  });
+
+  // Mutación para crear categoría
+  const createMutation = useMutation({
+    mutationFn: (data: CategoryFormData) => {
+      const processedData: any = {
+        name: data.name,
+        position: parseInt(data.position),
+        isActive: true
+      };
+      
+      // Agregar parentId solo si no es "none"
+      if (data.parentId !== 'none') {
+        processedData.parentId = data.parentId;
+      }
+      
+      console.log('Enviando datos al backend:', processedData);
+      return categoryService.createCategory(processedData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      toast({
+        title: 'Categoría creada',
+        description: 'La categoría se ha creado exitosamente',
+      });
+      setIsModalOpen(false);
+      setEditingCategory(null);
+    },
+    onError: (error: any) => {
+      console.error('Error completo:', error);
+      console.error('Response data:', error.response?.data);
+      console.error('Response status:', error.response?.status);
+      
+      // Extraer mensajes de error específicos
+      const responseData = error.response?.data;
+      let errorMessage = 'No se pudo crear la categoría';
+      
+      if (responseData?.message) {
+        if (Array.isArray(responseData.message)) {
+          // Si es un array de errores, unirlos
+          errorMessage = responseData.message.join(', ');
+        } else if (typeof responseData.message === 'string') {
+          errorMessage = responseData.message;
+        }
+      } else if (responseData?.error) {
+        errorMessage = responseData.error;
+      }
+      
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Mutación para actualizar categoría
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: CategoryFormData }) => {
+      const processedData: any = {
+        name: data.name,
+        position: parseInt(data.position)
+      };
+      
+      // Agregar parentId solo si no es "none"
+      if (data.parentId !== 'none') {
+        processedData.parentId = data.parentId;
+      }
+      
+      console.log('Actualizando categoría:', id, processedData);
+      return categoryService.updateCategory(id, processedData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      toast({
+        title: 'Categoría actualizada',
+        description: 'La categoría se ha actualizado exitosamente',
+      });
+      setIsModalOpen(false);
+      setEditingCategory(null);
+    },
+    onError: (error: any) => {
+      console.error('Error actualización:', error);
+      console.error('Response data:', error.response?.data);
+      
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.error || 
+                          'No se pudo actualizar la categoría';
+      
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Mutación para eliminar categoría
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => categoryService.deleteCategory(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      toast({
+        title: 'Categoría eliminada',
+        description: 'La categoría se ha eliminado exitosamente',
+      });
+    },
+    onError: (error: any) => {
+      console.error('Error eliminación:', error);
+      console.error('Response data:', error.response?.data);
+      
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.error || 
+                          'No se pudo eliminar la categoría';
+      
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    },
+  });
 
   const filteredCategories = categories.filter(category =>
     category.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleSubmit = (data: CategoryFormData) => {
-    // Convertir 'none' a string vacío para el backend
-    const processedData = {
-      ...data,
-      parentCategory: data.parentCategory === 'none' ? '' : data.parentCategory
-    };
-
     if (editingCategory) {
-      setCategories(prev => prev.map(category => 
-        category.id === editingCategory.id 
-          ? { ...category, ...processedData, position: parseInt(processedData.position) }
-          : category
-      ));
+      updateMutation.mutate({ id: editingCategory.id, data });
     } else {
-      const newCategory = {
-        id: Math.max(...categories.map(c => c.id)) + 1,
-        ...processedData,
-        position: parseInt(processedData.position),
-        subcategories: 0,
-        status: 'active'
-      };
-      setCategories(prev => [...prev, newCategory]);
+      createMutation.mutate(data);
     }
-
-    setEditingCategory(null);
-    setIsModalOpen(false);
   };
 
-  const handleEdit = (category: any) => {
+  const handleEdit = (category: Category) => {
     setEditingCategory(category);
     setIsModalOpen(true);
   };
 
-  const handleDelete = (categoryId: number) => {
-    setCategories(prev => prev.filter(category => category.id !== categoryId));
+  const handleDelete = (categoryId: string) => {
+    if (window.confirm('¿Estás seguro de que deseas eliminar esta categoría?')) {
+      deleteMutation.mutate(categoryId);
+    }
   };
 
-  const getParentCategoryBadge = (parentCategory: string | null) => {
+  const getParentCategoryBadge = (parentCategory?: string) => {
     if (!parentCategory) {
       return (
         <Badge variant="default" className="bg-green-100 text-green-800">
@@ -237,9 +245,10 @@ export default function CategoriesPage() {
           onSubmit={handleSubmit}
           initialData={editingCategory ? {
             name: editingCategory.name,
-            parentCategory: editingCategory.parentCategory || 'none',
+            parentId: editingCategory.parentId || 'none',
             position: editingCategory.position.toString()
           } : undefined}
+          loading={createMutation.isPending || updateMutation.isPending}
         />
 
         {/* Table */}
@@ -256,7 +265,7 @@ export default function CategoriesPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {loading ? (
+            {isLoading ? (
               <div className="space-y-3">
                 {[...Array(5)].map((_, i) => (
                   <div key={i} className="flex items-center space-x-4 p-4 border-b">
@@ -272,6 +281,16 @@ export default function CategoriesPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            ) : error ? (
+              <div className="text-center py-8">
+                <p className="text-red-600">Error al cargar las categorías</p>
+                <Button 
+                  onClick={() => queryClient.invalidateQueries({ queryKey: ['categories'] })}
+                  className="mt-2"
+                >
+                  Reintentar
+                </Button>
               </div>
             ) : (
               <Table>
@@ -308,7 +327,7 @@ export default function CategoriesPage() {
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary">
-                          {category.subcategories} subcategorías
+                          {category.subcategoriesCount} subcategorías
                         </Badge>
                       </TableCell>
                       <TableCell>

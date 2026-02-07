@@ -1,6 +1,4 @@
-import { redirect } from "next/navigation";
-
-export default function RootPage() {
-  // Redirige automáticamente a la página de login
-  redirect("./login");
-}
+// export default function RootPage() {
+//   // El middleware se encargará de la redirección
+//   return null;
+// }

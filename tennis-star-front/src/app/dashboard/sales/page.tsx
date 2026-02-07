@@ -1,36 +1,21 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Plus, 
   Search, 
-  Filter,
-  ShoppingCart,
-  User,
-  CreditCard,
-  Package,
-  TrendingUp,
-  TrendingDown,
   Eye,
-  DollarSign,
-  Truck,
-  CheckCircle,
-  XCircle,
-  Clock
+  Edit
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { orderService } from '@/services/orderService';
-import { OrderModal } from '@/components/modals/OrderModal';
 import { OrderDetailModal } from '@/components/modals/OrderDetailModal';
+import ManageOrderModal from '@/components/modals/ManageOrderModal';
 
 interface Order {
   id: string;
@@ -38,6 +23,7 @@ interface Order {
   status: string;
   total: number | string;
   paymentMethod: string;
+  paymentStatus: string;
   user?: {
     name: string;
     email: string;
@@ -45,6 +31,8 @@ interface Order {
   };
   createdAt: string;
   items: any[];
+  shippingAddress?: string;
+  trackingNumber?: string;
 }
 
 export default function SalesPage() {
@@ -53,8 +41,8 @@ export default function SalesPage() {
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
-  const [showOrderModal, setShowOrderModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showManageModal, setShowManageModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   useEffect(() => {
@@ -63,9 +51,9 @@ export default function SalesPage() {
 
   useEffect(() => {
     const filtered = orders.filter(order =>
-      order.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
       order.user?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.user?.email.toLowerCase().includes(searchQuery.toLowerCase())
+      order.user?.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      order.orderNumber.toLowerCase().includes(searchQuery.toLowerCase())
     );
     setFilteredOrders(filtered);
   }, [searchQuery, orders]);
@@ -82,13 +70,16 @@ export default function SalesPage() {
         status: order.status,
         total: typeof order.total === 'number' ? order.total : parseFloat(order.total) || 0,
         paymentMethod: order.paymentMethod || 'EFECTIVO',
+        paymentStatus: order.paymentStatus || 'PAGADO',
         user: order.user ? {
           name: order.user.name,
           email: order.user.email,
           phone: order.user.phone
         } : undefined,
         createdAt: order.createdAt,
-        items: order.items || []
+        items: order.items || [],
+        shippingAddress: order.shippingAddress,
+        trackingNumber: order.trackingNumber
       }));
       
       setOrders(convertedOrders);
@@ -98,30 +89,53 @@ export default function SalesPage() {
       setOrders([
         {
           id: '1',
-          orderNumber: 'ORD-001',
+          orderNumber: 'AB1850E7',
           status: 'ENVIADO',
-          total: 259.98,
-          paymentMethod: 'TARJETA_CREDITO',
+          total: 389.97,
+          paymentMethod: 'TARJETA',
+          paymentStatus: 'PAGADO',
           user: {
             name: 'Juan Pérez',
             email: 'juan@example.com',
             phone: '+54 11 1234-5678'
           },
-          createdAt: new Date().toISOString(),
-          items: []
+          createdAt: '2026-02-02T18:00:00.000Z',
+          items: [],
+          shippingAddress: 'Av. Corrientes 1234, Buenos Aires',
+          trackingNumber: 'TRK123456789'
         },
         {
           id: '2',
-          orderNumber: 'ORD-002',
-          status: 'PENDIENTE',
-          total: 129.99,
-          paymentMethod: 'TRANSFERENCIA',
+          orderNumber: 'CD2981F4',
+          status: 'EN PREPARACIÓN',
+          total: 259.99,
+          paymentMethod: 'EFECTIVO',
+          paymentStatus: 'PAGADO',
           user: {
             name: 'María García',
-            email: 'maria@example.com'
+            email: 'maria@example.com',
+            phone: '+54 11 9876-5432'
           },
-          createdAt: new Date().toISOString(),
-          items: []
+          createdAt: '2026-02-05T14:30:00.000Z',
+          items: [],
+          shippingAddress: 'Rivadavia 5678, Buenos Aires',
+          trackingNumber: ''
+        },
+        {
+          id: '3',
+          orderNumber: 'EF3746G2',
+          status: 'CANCELADO',
+          total: 129.99,
+          paymentMethod: 'TRANSFERENCIA',
+          paymentStatus: 'FALLIDO',
+          user: {
+            name: 'Carlos López',
+            email: 'carlos@example.com'
+          },
+          createdAt: '2026-02-04T10:15:00.000Z',
+          items: [],
+          shippingAddress: '',
+          trackingNumber: ''
         }
       ]);
     } finally {
@@ -130,105 +144,72 @@ export default function SalesPage() {
   };
 
   const getStatusBadge = (status: string) => {
-    const variants = {
-      'PENDIENTE': 'secondary',
-      'ENVIADO': 'default',
-      'ENTREGADO': 'default',
-      'CANCELADO': 'destructive'
-    } as const;
-
     const colors = {
-      'PENDIENTE': 'bg-orange-100 text-orange-800',
       'ENVIADO': 'bg-blue-100 text-blue-800',
+      'EN PREPARACIÓN': 'bg-orange-100 text-orange-800',
+      'CANCELADO': 'bg-red-100 text-red-800',
       'ENTREGADO': 'bg-green-100 text-green-800',
-      'CANCELADO': 'bg-red-100 text-red-800'
+      'PENDIENTE': 'bg-yellow-100 text-yellow-800'
     };
-
-    const icons = {
-      'PENDIENTE': Clock,
-      'ENVIADO': Truck,
-      'ENTREGADO': CheckCircle,
-      'CANCELADO': XCircle
-    };
-
-    const Icon = icons[status as keyof typeof icons];
 
     return (
       <Badge 
-        variant={variants[status as keyof typeof variants]} 
-        className={colors[status as keyof typeof colors]}
+        variant="outline" 
+        className={colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800'}
       >
-        <Icon className="h-3 w-3 mr-1" />
         {status}
       </Badge>
     );
   };
 
-  const getPaymentBadge = (paymentMethod: string) => {
-    // Basar el estado del pago en el método de pago (simplificado)
-    const variants = {
-      'TARJETA_CREDITO': 'default',
-      'TARJETA_DEBITO': 'default',
-      'EFECTIVO': 'default',
-      'TRANSFERENCIA': 'secondary',
-      'MERCADO_PAGO': 'default'
-    } as const;
-
+  const getPaymentBadge = (paymentStatus: string) => {
     const colors = {
-      'TARJETA_CREDITO': 'bg-green-100 text-green-800',
-      'TARJETA_DEBITO': 'bg-green-100 text-green-800',
-      'EFECTIVO': 'bg-green-100 text-green-800',
-      'TRANSFERENCIA': 'bg-yellow-100 text-yellow-800',
-      'MERCADO_PAGO': 'bg-blue-100 text-blue-800'
-    };
-
-    const labels = {
-      'TARJETA_CREDITO': 'Tarjeta',
-      'TARJETA_DEBITO': 'Tarjeta',
-      'EFECTIVO': 'Efectivo',
-      'TRANSFERENCIA': 'Transferencia',
-      'MERCADO_PAGO': 'Mercado Pago'
+      'PAGADO': 'bg-slate-900 text-white',
+      'FALLIDO': 'bg-red-600 text-white',
+      'PENDIENTE': 'bg-yellow-100 text-yellow-800'
     };
 
     return (
       <Badge 
-        variant={variants[paymentMethod as keyof typeof variants] || 'secondary'} 
-        className={colors[paymentMethod as keyof typeof colors]}
+        variant="outline" 
+        className={colors[paymentStatus as keyof typeof colors] || 'bg-gray-100 text-gray-800'}
       >
-        {labels[paymentMethod as keyof typeof labels] || paymentMethod}
+        {paymentStatus}
       </Badge>
     );
   };
 
-  const stats = {
-    total: orders.length,
-    pending: orders.filter(o => o.status === 'PENDIENTE').length,
-    shipped: orders.filter(o => o.status === 'ENVIADO').length,
-    delivered: orders.filter(o => o.status === 'ENTREGADO').length,
-    cancelled: orders.filter(o => o.status === 'CANCELADO').length,
-    totalRevenue: orders.reduce((sum, o) => sum + (typeof o.total === 'number' ? o.total : parseFloat(o.total) || 0), 0)
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const day = date.getDate();
+    const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const month = months[date.getMonth()];
+    const year = date.getFullYear().toString().slice(-2);
+    return `${day} ${month} ${year}`;
   };
 
-  // Asegurar que totalRevenue sea siempre un número
-  const safeStats = {
-    ...stats,
-    totalRevenue: typeof stats.totalRevenue === 'number' ? stats.totalRevenue : parseFloat(stats.totalRevenue) || 0
+  const formatPrice = (price: any) => {
+    const num = typeof price === 'number' ? price : parseFloat(price);
+    return isNaN(num) ? '0.00' : num.toFixed(2);
+  };
+
+  const getPaymentMethodLabel = (method: string) => {
+    const labels = {
+      'TARJETA': 'Tarjeta',
+      'EFECTIVO': 'Efectivo',
+      'TRANSFERENCIA': 'Transferencia',
+      'MERCADO_PAGO': 'Mercado Pago'
+    };
+    return labels[method as keyof typeof labels] || method;
+  };
+
+  const getInitials = (name: string) => {
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
   const handleViewOrder = (order: Order) => {
     setSelectedOrder(order);
     setShowDetailModal(true);
-  };
-
-  const handleOrderCreated = () => {
-    // Recargar órdenes después de crear una nueva
-    loadOrders();
-  };
-
-  // Helper para asegurar que el total sea siempre un número
-  const formatPrice = (price: any) => {
-    const num = typeof price === 'number' ? price : parseFloat(price);
-    return isNaN(num) ? '0.00' : num.toFixed(2);
   };
 
   if (!isAdmin && !isStaff) {
@@ -243,125 +224,55 @@ export default function SalesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto p-6 space-y-6">
+    <div className="min-h-screen bg-slate-50">
+      <div className="container mx-auto p-6">
         {/* Header */}
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Ventas</h1>
-            <p className="text-gray-600">Gestiona las órdenes y transacciones</p>
-          </div>
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Ventas</h1>
           <Button 
-            className="bg-blue-600 hover:bg-blue-700"
-            onClick={() => setShowOrderModal(true)}
+            className="bg-slate-900 hover:bg-slate-800 text-white"
+            onClick={() => setShowManageModal(true)}
           >
             <Plus className="mr-2 h-4 w-4" />
-            Generar Venta
+            Nuevo Pedido
           </Button>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Órdenes</CardTitle>
-              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{safeStats.total}</div>
-              <p className="text-xs text-muted-foreground">
-                Todas las órdenes
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
-              <Clock className="h-4 w-4 text-orange-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-600">{safeStats.pending}</div>
-              <p className="text-xs text-muted-foreground">
-                Esperando procesamiento
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Enviadas</CardTitle>
-              <Truck className="h-4 w-4 text-blue-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-600">{safeStats.shipped}</div>
-              <p className="text-xs text-muted-foreground">
-                En camino
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Entregadas</CardTitle>
-              <CheckCircle className="h-4 w-4 text-green-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">{safeStats.delivered}</div>
-              <p className="text-xs text-muted-foreground">
-                Completadas
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Ingresos</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">${safeStats.totalRevenue.toFixed(2)}</div>
-              <p className="text-xs text-muted-foreground">
-                Total generado
-              </p>
-            </CardContent>
-          </Card>
+        {/* Search */}
+        <div className="relative mb-6">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Input
+            placeholder="Buscar por nombre..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
         </div>
 
-        {/* Search and Filters */}
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Buscar órdenes..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Button variant="outline">
-                <Filter className="mr-2 h-4 w-4" />
-                Filtros
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Orders Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Órdenes ({filteredOrders.length})</CardTitle>
-            <CardDescription>
-              Listado completo de ventas y transacciones
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        {/* Table */}
+        <Card className="bg-white rounded-lg shadow-sm">
+          <CardContent className="p-0">
             {loading ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="mt-2 text-gray-500">Cargando órdenes...</p>
+              <div className="space-y-3 p-6">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="flex items-center space-x-4 p-4 border-b">
+                    <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse"></div>
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 bg-gray-200 rounded animate-pulse w-1/3"></div>
+                      <div className="h-3 bg-gray-200 rounded animate-pulse w-1/2"></div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="h-4 bg-gray-200 rounded animate-pulse w-20"></div>
+                      <div className="h-3 bg-gray-200 rounded animate-pulse w-16"></div>
+                    </div>
+                    <div className="w-20 h-6 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="w-16 h-6 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="flex space-x-2">
+                      <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
+                      <div className="w-8 h-8 bg-gray-200 rounded animate-pulse"></div>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <Table>
@@ -370,8 +281,8 @@ export default function SalesPage() {
                     <TableHead>Cliente</TableHead>
                     <TableHead>Número de Orden</TableHead>
                     <TableHead>Estado</TableHead>
-                    <TableHead>Pago</TableHead>
                     <TableHead>Total</TableHead>
+                    <TableHead>Pago</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -380,37 +291,60 @@ export default function SalesPage() {
                     <TableRow key={order.id}>
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                            <User className="h-4 w-4 text-gray-500" />
+                          <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center">
+                            <span className="text-sm font-medium text-slate-600">
+                              {order.user ? getInitials(order.user.name) : 'VD'}
+                            </span>
                           </div>
                           <div>
-                            <div className="font-medium">{order.user?.name || 'Venta directa'}</div>
-                            <div className="text-sm text-gray-500">{order.user?.email}</div>
+                            <div className="font-medium text-gray-900">
+                              {order.user?.name || 'Venta directa'}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {order.user?.email}
+                            </div>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="font-mono text-sm">{order.orderNumber}</div>
+                        <div className="font-mono text-sm text-gray-900">
+                          {order.orderNumber}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {formatDate(order.createdAt)}
+                        </div>
                       </TableCell>
                       <TableCell>
                         {getStatusBadge(order.status)}
                       </TableCell>
                       <TableCell>
-                        {getPaymentBadge(order.paymentMethod)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium">
+                        <div className="font-medium text-gray-900">
                           ${formatPrice(order.total)}
                         </div>
+                        <div className="text-sm text-gray-500">
+                          {getPaymentMethodLabel(order.paymentMethod)}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {getPaymentBadge(order.paymentStatus)}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleViewOrder(order)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleViewOrder(order)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => console.log('Editar orden:', order.id)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -420,16 +354,17 @@ export default function SalesPage() {
           </CardContent>
         </Card>
 
-        {/* Modals */}
-        <OrderModal 
-          open={showOrderModal} 
-          onOpenChange={setShowOrderModal}
-          onOrderCreated={handleOrderCreated}
-        />
-
+        {/* Modal de Detalle */}
         <OrderDetailModal
           open={showDetailModal}
           onOpenChange={setShowDetailModal}
+          order={selectedOrder}
+        />
+
+        {/* Modal de Gestión */}
+        <ManageOrderModal
+          open={showManageModal}
+          onOpenChange={setShowManageModal}
           order={selectedOrder}
         />
       </div>

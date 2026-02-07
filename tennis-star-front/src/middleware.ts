@@ -5,20 +5,25 @@ export function middleware(request: NextRequest) {
   const token = request.cookies.get('token')?.value || request.headers.get('authorization')?.replace('Bearer ', '');
   
   // Public routes que no requieren autenticación
-  const publicRoutes = ['/login', '/register', '/catalog'];
+  const publicRoutes = ['/login', '/register', '/catalog', '/'];
   
   // Protected routes que requieren autenticación
   const protectedRoutes = ['/dashboard', '/profile', '/orders'];
   
   const { pathname } = request.nextUrl;
   
+  // Si accede a la raíz sin token, redirigir a login
+  if (pathname === '/' && !token) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+  
   // Si accede a rutas protegidas sin token, redirigir a login
   if (protectedRoutes.some(route => pathname.startsWith(route)) && !token) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
   
-  // Si accede a rutas públicas con token, redirigir basado en rol
-  if (publicRoutes.some(route => pathname.startsWith(route)) && token) {
+  // Si accede a rutas públicas (excepto raíz) con token, redirigir basado en rol
+  if (publicRoutes.some(route => route !== '/' && pathname.startsWith(route)) && token) {
     // Para usuarios autenticados, redirigir al dashboard
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,18 +20,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { X } from 'lucide-react';
+import { X, Loader2 } from 'lucide-react';
+import { categoryService } from '@/services/categoryService';
 
 interface CategoryModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: CategoryFormData) => void;
   initialData?: CategoryFormData;
+  loading?: boolean;
 }
 
 export interface CategoryFormData {
   name: string;
-  parentCategory: string;
+  parentId: string;
   position: string;
 }
 
@@ -38,12 +41,20 @@ export default function CategoryModal({
   open, 
   onOpenChange, 
   onSubmit, 
-  initialData 
+  initialData,
+  loading = false
 }: CategoryModalProps) {
   const [formData, setFormData] = useState<CategoryFormData>({
     name: initialData?.name || '',
-    parentCategory: initialData?.parentCategory || '',
+    parentId: initialData?.parentId || '',
     position: initialData?.position || ''
+  });
+
+  // Query para obtener categorías principales (para el selector de padre)
+  const { data: parentCategories = [], isLoading: parentCategoriesLoading } = useQuery({
+    queryKey: ['parent-categories'],
+    queryFn: () => categoryService.getParentCategories(),
+    enabled: open, // Solo cargar cuando el modal está abierto
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -54,7 +65,7 @@ export default function CategoryModal({
     if (!initialData) {
       setFormData({
         name: '',
-        parentCategory: '',
+        parentId: '',
         position: ''
       });
     }
@@ -109,20 +120,22 @@ export default function CategoryModal({
 
             {/* Categoría Padre */}
             <div className="grid gap-2">
-              <Label htmlFor="parentCategory">Categoría Padre</Label>
+              <Label htmlFor="parentId">Categoría Padre</Label>
               <Select 
-                value={formData.parentCategory || 'none'} 
-                onValueChange={(value) => handleInputChange('parentCategory', value === 'none' ? '' : value)}
+                value={formData.parentId || 'none'} 
+                onValueChange={(value) => handleInputChange('parentId', value === 'none' ? '' : value)}
+                disabled={parentCategoriesLoading}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Principal (sin padre)" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Principal (sin padre)</SelectItem>
-                  <SelectItem value="Hombre">Hombre</SelectItem>
-                  <SelectItem value="Mujer">Mujer</SelectItem>
-                  <SelectItem value="Niño">Niño</SelectItem>
-                  <SelectItem value="Niña">Niña</SelectItem>
+                  {parentCategories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -147,8 +160,16 @@ export default function CategoryModal({
             <Button 
               type="submit" 
               className="bg-slate-900 hover:bg-slate-800 text-white rounded-md"
+              disabled={loading}
             >
-              {initialData ? 'Guardar Cambios' : 'Crear'}
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {initialData ? 'Guardando...' : 'Creando...'}
+                </>
+              ) : (
+                initialData ? 'Guardar Cambios' : 'Crear'
+              )}
             </Button>
           </DialogFooter>
         </form>
