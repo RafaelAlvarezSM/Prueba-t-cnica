@@ -1,5 +1,15 @@
 import api from '@/lib/axios';
 
+export interface ProductOption {
+  id?: string;
+  size?: string;
+  color?: string;
+  material?: string;
+  sku?: string;
+  stock?: number;
+  minStock?: number;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -9,26 +19,16 @@ export interface Product {
   price: number;
   parentCategoryName: string;
   subCategoryName: string;
+  categoryId?: string; // Agregado para el DTO
   options: ProductOption[];
   isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ProductOption {
-  id: string;
-  size: string;
-  color: string;
-  material: string;
-  sku: string;
-  stock: number;
-  minStock: number;
+  category?: { id: string; name: string; parent?: { name: string } };
 }
 
 export interface CreateProductData {
   name: string;
-  description: string;
-  sku: string;
+  description?: string;
+  sku?: string;
   brandName: string;
   price: number;
   parentCategoryName: string;
@@ -36,57 +36,48 @@ export interface CreateProductData {
   options: ProductOption[];
 }
 
+// Interfaz que cumple estrictamente con tu UpdateProductDto de NestJS
 export interface UpdateProductData {
   name?: string;
   description?: string;
   sku?: string;
   brandName?: string;
   price?: number;
-  parentCategoryName?: string;
-  subCategoryName?: string;
+  categoryId?: string;
+  isActive?: boolean;
   options?: ProductOption[];
 }
 
 class ProductService {
-  // Obtener todos los productos
   async getProducts(): Promise<Product[]> {
-    const response = await api.get('/products');
-    return response.data;
+    const res = await api.get('/products');
+    return res.data.map((p: any) => ({
+      ...p,
+      parentCategoryName: p.parentCategoryName || p.category?.parent?.name || p.category?.name || 'Sin Categoría',
+      subCategoryName: p.subCategoryName || p.category?.name || 'General',
+      categoryId: p.categoryId || p.category?.id
+    }));
   }
 
-  // Obtener un producto por ID
-  async getProductById(id: string): Promise<Product> {
-    const response = await api.get(`/products/${id}`);
-    return response.data;
+  async createProduct(data: CreateProductData): Promise<Product> {
+    const res = await api.post('/products', data);
+    return res.data;
   }
 
-  // Crear un nuevo producto
-  async createProduct(productData: CreateProductData): Promise<Product> {
-    const response = await api.post('/products', productData);
-    return response.data;
+  async updateProduct(id: string, data: UpdateProductData): Promise<Product> {
+    // Eliminamos cualquier campo que no pertenezca al DTO para evitar el 400
+    const { parentCategoryName, subCategoryName, ...cleanData }: any = data;
+    const res = await api.patch(`/products/${id}`, cleanData);
+    return res.data;
   }
 
-  // Actualizar un producto
-  async updateProduct(id: string, productData: UpdateProductData): Promise<Product> {
-    const response = await api.put(`/products/${id}`, productData);
-    return response.data;
-  }
-
-  // Eliminar un producto
   async deleteProduct(id: string): Promise<void> {
     await api.delete(`/products/${id}`);
   }
 
-  // Obtener categorías principales para selector
   async getParentCategories(): Promise<string[]> {
-    const response = await api.get('/categories/roots');
-    return response.data.map((cat: any) => cat.name);
-  }
-
-  // Obtener subcategorías de una categoría principal
-  async getSubcategories(parentCategoryName: string): Promise<string[]> {
-    const response = await api.get(`/categories/children/${parentCategoryName}`);
-    return response.data.map((cat: any) => cat.name);
+    const res = await api.get('/categories/roots');
+    return res.data.map((c: any) => c.name);
   }
 }
 

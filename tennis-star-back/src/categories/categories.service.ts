@@ -6,7 +6,7 @@ import { CategoryResponseDto } from './dto/category-response.dto';
 
 @Injectable()
 export class CategoriesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async create(createCategoryDto: CreateCategoryDto) {
     const { parentId, ...categoryData } = createCategoryDto;
@@ -104,7 +104,7 @@ export class CategoriesService {
 
   async findRootCategories() {
     return this.prisma.category.findMany({
-      where: { 
+      where: {
         parentId: null,
         isActive: true,
       },
@@ -122,7 +122,7 @@ export class CategoriesService {
 
   async findChildrenByParent(parentId: string) {
     return this.prisma.category.findMany({
-      where: { 
+      where: {
         parentId: parentId,
         isActive: true,
       },
@@ -167,7 +167,7 @@ export class CategoriesService {
 
   async findPrincipalCategories() {
     return this.prisma.category.findMany({
-      where: { 
+      where: {
         parentId: null,
         isActive: true,
       },
@@ -309,12 +309,9 @@ export class CategoriesService {
     }
 
     // Soft delete
-    await this.prisma.category.update({
-      where: { id },
-      data: { isActive: false },
-    });
+    await this.prisma.category.delete({where: { id } });
 
-    return { message: 'Categoría desactivada exitosamente' };
+    return { message: 'Categoría eliminada exitosamente' };
   }
 
   private formatCategoryResponse(category: any): CategoryResponseDto {

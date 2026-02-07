@@ -11,11 +11,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Search, 
+import {
+  Plus,
+  Edit,
+  Trash2,
+  Search,
   Filter,
   Package,
   ShoppingCart,
@@ -28,7 +28,7 @@ export default function ProductsPage() {
   const { isAdmin, user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
+
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | undefined>(undefined);
@@ -55,10 +55,10 @@ export default function ProductsPage() {
     },
     onError: (error: any) => {
       console.error('Error creación:', error);
-      const errorMessage = error.response?.data?.message || 
-                        error.response?.data?.error || 
-                        'No se pudo crear el producto';
-      
+      const errorMessage = error.response?.data?.message ||
+        error.response?.data?.error ||
+        'No se pudo crear el producto';
+
       toast({
         title: 'Error',
         description: errorMessage,
@@ -69,7 +69,7 @@ export default function ProductsPage() {
 
   // Mutación para actualizar producto
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdateProductData }) => 
+    mutationFn: ({ id, data }: { id: string; data: UpdateProductData }) =>
       productService.updateProduct(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
@@ -82,10 +82,10 @@ export default function ProductsPage() {
     },
     onError: (error: any) => {
       console.error('Error actualización:', error);
-      const errorMessage = error.response?.data?.message || 
-                        error.response?.data?.error || 
-                        'No se pudo actualizar el producto';
-      
+      const errorMessage = error.response?.data?.message ||
+        error.response?.data?.error ||
+        'No se pudo actualizar el producto';
+
       toast({
         title: 'Error',
         description: errorMessage,
@@ -106,10 +106,10 @@ export default function ProductsPage() {
     },
     onError: (error: any) => {
       console.error('Error eliminación:', error);
-      const errorMessage = error.response?.data?.message || 
-                        error.response?.data?.error || 
-                        'No se pudo eliminar el producto';
-      
+      const errorMessage = error.response?.data?.message ||
+        error.response?.data?.error ||
+        'No se pudo eliminar el producto';
+
       toast({
         title: 'Error',
         description: errorMessage,
@@ -131,10 +131,10 @@ export default function ProductsPage() {
     },
     onError: (error: any) => {
       console.error('Error orden:', error);
-      const errorMessage = error.response?.data?.message || 
-                        error.response?.data?.error || 
-                        'No se pudo crear la orden';
-      
+      const errorMessage = error.response?.data?.message ||
+        error.response?.data?.error ||
+        'No se pudo crear la orden';
+
       toast({
         title: 'Error',
         description: errorMessage,
@@ -211,7 +211,7 @@ export default function ProductsPage() {
       'Niño': 'bg-green-100 text-green-800',
       'Niña': 'bg-pink-100 text-pink-800'
     };
-    
+
     return (
       <Badge variant="outline" className={colors[category as keyof typeof colors] || 'bg-gray-100 text-gray-800'}>
         {category}
@@ -260,7 +260,7 @@ export default function ProductsPage() {
                   <div className="h-48 bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">
                     <Package className="h-16 w-16 text-slate-400" />
                   </div>
-                  
+
                   <CardContent className="p-4">
                     {/* Nombre y categoría */}
                     <div className="mb-3">
@@ -288,20 +288,26 @@ export default function ProductsPage() {
                           SKU: {product.sku}
                         </p>
                       </div>
-                      {getStockBadge(product.options.reduce((sum, opt) => sum + opt.stock, 0))}
+                      {getStockBadge(product.options.reduce((sum, opt) => sum + (opt.stock ?? 0), 0))}
                     </div>
 
                     {/* Botón de compra */}
-                    <Button 
-                      onClick={() => {
-                        // Usar la primera opción disponible del producto
-                        const firstOption = product.options[0];
-                        if (firstOption) {
-                          handleBuy(product.id, firstOption.id, product.price);
-                        }
-                      }}
-                      className="w-full bg-slate-900 hover:bg-slate-800 text-white"
-                      disabled={createOrderMutation.isPending || product.options.length === 0}
+                    <Button
+                     onClick={() => {
+    const firstOption = product.options[0];
+    // Verificamos que la opción exista Y que tenga un ID
+    if (firstOption && firstOption.id) {
+      handleBuy(product.id, firstOption.id, product.price);
+    } else {
+      toast({
+        title: "Error",
+        description: "Este producto no tiene opciones de compra disponibles",
+        variant: "destructive"
+      });
+    }
+  }}
+  className="w-full bg-slate-900 hover:bg-slate-800 text-white"
+  disabled={createOrderMutation.isPending || product.options.length === 0}
                     >
                       {createOrderMutation.isPending ? (
                         <>
@@ -342,8 +348,11 @@ export default function ProductsPage() {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Gestión de Productos</h1>
           <div className="flex gap-3">
-            <Button 
-              onClick={() => setIsModalOpen(true)}
+            <Button
+              onClick={() => {
+                setEditingProduct(undefined);  // 🔄 Limpia estado de edición
+                setIsModalOpen(true);           // 🚀 Abre modal para NUEVO producto
+              }}
               className="bg-slate-900 hover:bg-slate-800 text-white"
             >
               <Plus className="mr-2 h-4 w-4" />
@@ -425,7 +434,7 @@ export default function ProductsPage() {
                         ${product.price.toLocaleString('es-CO')}
                       </TableCell>
                       <TableCell>
-                        {getStockBadge(product.options.reduce((sum, opt) => sum + opt.stock, 0))}
+                        {getStockBadge(product.options.reduce((sum, opt) => sum + (opt.stock ?? 0), 0))}
                       </TableCell>
                       <TableCell>
                         <Badge variant="default" className="bg-green-100 text-green-800">
