@@ -239,7 +239,7 @@ export class CategoriesService {
 
     // Si se actualiza el nombre, verificar que no exista
     if (categoryData.name && categoryData.name !== existingCategory.name) {
-      const nameExists = await this.prisma.category.findUnique({
+      const nameExists = await this.prisma.category.findFirst({
         where: { name: categoryData.name },
       });
 

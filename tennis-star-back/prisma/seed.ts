@@ -2,10 +2,9 @@ import { PrismaClient } from '../generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import dotenv from 'dotenv';
 
-// Cargar variables de entorno
+// 1. Cargar variables de entorno
 dotenv.config();
 
-// Verificar que DATABASE_URL exista
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
   console.error('❌ DATABASE_URL no está definida en las variables de entorno');
@@ -13,7 +12,6 @@ if (!databaseUrl) {
 }
 
 console.log('🔗 Conectando a la base de datos...');
-console.log('📍 DATABASE_URL:', databaseUrl.replace(/:([^:@]+)@/, ':***@')); // Oculta contraseña
 
 const adapter = new PrismaPg({
   connectionString: databaseUrl,
@@ -22,10 +20,9 @@ const adapter = new PrismaPg({
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  console.log('🌱 Iniciando seeder de categorías raíz...');
+  console.log('🌱 Iniciando seeder de categorías y subcategorías...');
   
   try {
-    // Probar conexión
     await prisma.$connect();
     console.log('✅ Conexión exitosa a la base de datos');
   } catch (error) {
@@ -33,19 +30,57 @@ async function main() {
     throw error;
   }
 
-  const roots = ['Hombre', 'Mujer', 'Niño', 'Niña'];
-  
-  for (const name of roots) {
-    await prisma.category.upsert({
-      where: { name },
-      update: {},
-      create: { 
-        name, 
-        position: 0,
-        description: `Categoría principal para ${name.toLowerCase()}`
-      }
+  // Definición de estructura: Raíz -> Subcategorías
+  const categoriesStructure = {
+    'Hombre': ['Calzado', 'Ropa', 'Accesorios', 'Raquetas'],
+    'Mujer': ['Calzado', 'Ropa', 'Accesorios', 'Raquetas'],
+    'Niño': ['Calzado', 'Ropa', 'Raquetas'],
+    'Niña': ['Calzado', 'Ropa', 'Raquetas']
+  };
+
+  for (const [rootName, subCategories] of Object.entries(categoriesStructure)) {
+    
+    // --- 1. PROCESAR CATEGORÍA RAÍZ ---
+    let rootCategory = await prisma.category.findFirst({
+      where: { name: rootName, parentId: null }
     });
-    console.log(`✅ Categoría raíz creada: ${name}`);
+
+    if (!rootCategory) {
+      rootCategory = await prisma.category.create({
+        data: { 
+          name: rootName, 
+          position: 0,
+          description: `Categoría principal para ${rootName.toLowerCase()}`
+        }
+      });
+      console.log(`✅ Categoría raíz creada: ${rootName}`);
+    } else {
+      console.log(`ℹ️ La raíz ${rootName} ya existe.`);
+    }
+
+    // --- 2. PROCESAR SUBCATEGORÍAS ---
+    for (const subName of subCategories) {
+      const existingSub = await prisma.category.findFirst({
+        where: { 
+          name: subName,
+          parentId: rootCategory.id 
+        }
+      });
+
+      if (!existingSub) {
+        await prisma.category.create({
+          data: {
+            name: subName,
+            parentId: rootCategory.id,
+            position: 1,
+            description: `${subName} para la sección de ${rootName}`
+          }
+        });
+        console.log(`   └─ ✅ Subcategoría creada: ${subName}`);
+      } else {
+        console.log(`   └─ ℹ️ La subcategoría ${subName} ya existe.`);
+      }
+    }
   }
 
   console.log('🎉 Seeder completado exitosamente');
