@@ -146,7 +146,7 @@ export default function ProductsPage() {
   const filteredProducts = products.filter(product =>
     product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     product.brandName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    product.parentCategoryName.toLowerCase().includes(searchQuery.toLowerCase())
+    (product.parentCategoryName || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleSubmit = (data: CreateProductData) => {
@@ -268,8 +268,8 @@ export default function ProductsPage() {
                         {product.name}
                       </h3>
                       <div className="flex items-center gap-2">
-                        {getCategoryBadge(product.parentCategoryName)}
-                        <span className="text-sm text-gray-500">{product.subCategoryName}</span>
+                        {getCategoryBadge(product.parentCategoryName || '')}
+                        <span className="text-sm text-gray-500">{product.subCategoryName || ''}</span>
                       </div>
                     </div>
 
@@ -293,21 +293,21 @@ export default function ProductsPage() {
 
                     {/* Botón de compra */}
                     <Button
-                     onClick={() => {
-    const firstOption = product.options[0];
-    // Verificamos que la opción exista Y que tenga un ID
-    if (firstOption && firstOption.id) {
-      handleBuy(product.id, firstOption.id, product.price);
-    } else {
-      toast({
-        title: "Error",
-        description: "Este producto no tiene opciones de compra disponibles",
-        variant: "destructive"
-      });
-    }
-  }}
-  className="w-full bg-slate-900 hover:bg-slate-800 text-white"
-  disabled={createOrderMutation.isPending || product.options.length === 0}
+                      onClick={() => {
+                        const firstOption = product.options[0];
+                        // Verificamos que la opción exista Y que tenga un ID
+                        if (firstOption && firstOption.id) {
+                          handleBuy(product.id, firstOption.id, product.price);
+                        } else {
+                          toast({
+                            title: "Error",
+                            description: "Este producto no tiene opciones de compra disponibles",
+                            variant: "destructive"
+                          });
+                        }
+                      }}
+                      className="w-full bg-slate-900 hover:bg-slate-800 text-white"
+                      disabled={createOrderMutation.isPending || product.options.length === 0}
                     >
                       {createOrderMutation.isPending ? (
                         <>
@@ -350,8 +350,8 @@ export default function ProductsPage() {
           <div className="flex gap-3">
             <Button
               onClick={() => {
-                setEditingProduct(undefined);  // 🔄 Limpia estado de edición
-                setIsModalOpen(true);           // 🚀 Abre modal para NUEVO producto
+                setEditingProduct(undefined);  // Limpia estado de edición
+                setIsModalOpen(true);           // Abre modal para NUEVO producto
               }}
               className="bg-slate-900 hover:bg-slate-800 text-white"
             >
@@ -426,8 +426,8 @@ export default function ProductsPage() {
                       <TableCell className="font-medium">{product.brandName}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          {getCategoryBadge(product.parentCategoryName)}
-                          <span className="text-sm text-gray-500">{product.subCategoryName}</span>
+                          {getCategoryBadge(product.parentCategoryName || '')}
+                          <span className="text-sm text-gray-500">{product.subCategoryName || ''}</span>
                         </div>
                       </TableCell>
                       <TableCell className="font-medium">

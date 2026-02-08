@@ -2,27 +2,38 @@ import api from '@/lib/axios';
 
 export interface ProductOption {
   id?: string;
-  size?: string;
-  color?: string;
+  size: string;
+  color: string;
   material?: string;
   sku?: string;
-  stock?: number;
-  minStock?: number;
+  stock: number;
+  minStock: number;
+  isActive?: boolean;
 }
 
 export interface Product {
   id: string;
   name: string;
-  description: string;
-  sku: string;
+  description: string | null;
+  sku: string | null;
   brandName: string;
   price: number;
-  parentCategoryName: string;
-  subCategoryName: string;
-  categoryId?: string; // Agregado para el DTO
-  options: ProductOption[];
   isActive: boolean;
-  category?: { id: string; name: string; parent?: { name: string } };
+  categoryId: string;
+  category: {
+    id: string;
+    name: string;
+    parent?: {
+      id: string;
+      name: string;
+    } | null;
+  };
+  options: ProductOption[];
+  createdAt: string;
+  updatedAt: string;
+  // Propiedades computadas para compatibilidad con frontend
+  parentCategoryName?: string;
+  subCategoryName?: string;
 }
 
 export interface CreateProductData {
@@ -34,6 +45,7 @@ export interface CreateProductData {
   parentCategoryName: string;
   subCategoryName: string;
   options: ProductOption[];
+  isActive?: boolean;
 }
 
 // Interfaz que cumple estrictamente con tu UpdateProductDto de NestJS
@@ -50,12 +62,11 @@ export interface UpdateProductData {
 
 class ProductService {
   async getProducts(): Promise<Product[]> {
-    const res = await api.get('/products');
+    const res = await api.get('/products/hierarchy');
     return res.data.map((p: any) => ({
       ...p,
-      parentCategoryName: p.parentCategoryName || p.category?.parent?.name || p.category?.name || 'Sin Categoría',
-      subCategoryName: p.subCategoryName || p.category?.name || 'General',
-      categoryId: p.categoryId || p.category?.id
+      parentCategoryName: p.category?.parent?.name || '',
+      subCategoryName: p.category?.name || ''
     }));
   }
 
@@ -77,6 +88,17 @@ class ProductService {
 
   async getParentCategories(): Promise<string[]> {
     const res = await api.get('/categories/roots');
+    return res.data.map((c: any) => c.name);
+  }
+
+  async getParentCategoryByName(name: string): Promise<{id: string, name: string} | null> {
+    const res = await api.get('/categories/roots');
+    const category = res.data.find((c: any) => c.name === name);
+    return category || null;
+  }
+
+  async getSubcategories(parentId: string): Promise<string[]> {
+    const res = await api.get(`/categories/children/${parentId}`);
     return res.data.map((c: any) => c.name);
   }
 }

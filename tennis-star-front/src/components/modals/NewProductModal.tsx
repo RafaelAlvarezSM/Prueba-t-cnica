@@ -19,8 +19,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Trash2, Plus, Package, Layers, Info, DollarSign, Image as ImageIcon } from 'lucide-react';
-import { productService, CreateProductData, Product } from '@/services/productService';
+import { Trash2, Plus, Package, Layers, Info, DollarSign, Image as ImageIcon, ChevronRight, Home } from 'lucide-react';
+import { productService, CreateProductData, Product, ProductOption } from '@/services/productService';
+import api from '@/lib/axios';
 
 interface NewProductModalProps {
   open: boolean;
@@ -45,9 +46,63 @@ export default function NewProductModal({
     price: 0,
     parentCategoryName: '',
     subCategoryName: '',
-    options: [{ size: '', color: '', material: '', sku: '', stock: 0, minStock: 0 }]
+    options: [{ size: '', color: '', material: '', sku: undefined, stock: 0, minStock: 0 }]
   });
 
+  // Función de limpieza estricta de payload para cumplir con DTOs
+  const cleanPayload = (data: CreateProductData): any => {
+    const isEdit = !!initialData;
+    
+    if (isEdit) {
+      // Para actualización: solo campos permitidos en UpdateProductDto
+      const updatePayload: any = {
+        name: data.name || undefined,
+        description: data.description || undefined,
+        sku: data.sku || undefined,
+        brandName: data.brandName || undefined,
+        price: data.price ? parseFloat(data.price.toString()) : undefined,
+        options: data.options?.map(opt => ({
+          size: opt.size || undefined,
+          color: opt.color || undefined,
+          material: opt.material || undefined,
+          sku: opt.sku && opt.sku.trim() !== '' ? opt.sku.trim() : undefined, // Convertir vacíos a undefined
+          stock: opt.stock !== undefined ? Number(opt.stock) : undefined,
+          minStock: opt.minStock !== undefined ? Number(opt.minStock) : undefined
+        })).filter(opt => Object.values(opt).some(v => v !== undefined))
+      };
+      
+      // Eliminar campos undefined
+      Object.keys(updatePayload).forEach(key => {
+        if (updatePayload[key] === undefined || (Array.isArray(updatePayload[key]) && updatePayload[key].length === 0)) {
+          delete updatePayload[key];
+        }
+      });
+      
+      return updatePayload;
+    } else {
+      // Para creación: campos requeridos en CreateProductDto
+      return {
+        name: data.name,
+        description: data.description || '',
+        sku: data.sku || '',
+        brandName: data.brandName,
+        price: parseFloat(data.price.toString()),
+        parentCategoryName: data.parentCategoryName,
+        subCategoryName: data.subCategoryName,
+        options: data.options.map(opt => ({
+          size: opt.size,
+          color: opt.color,
+          material: opt.material || '',
+          sku: opt.sku && opt.sku.trim() !== '' ? opt.sku.trim() : undefined, // Convertir vacíos a undefined
+          stock: Number(opt.stock) || 0,
+          minStock: Number(opt.minStock) || 5
+        })),
+        isActive: data.isActive
+      };
+    }
+  };
+
+  // Reactivar queries de categorías padre para el select
   const { data: parentCategories = [] } = useQuery({
     queryKey: ['parent-categories'],
     queryFn: () => productService.getParentCategories(),
@@ -57,24 +112,39 @@ export default function NewProductModal({
   useEffect(() => {
     if (open) {
       if (initialData) {
+        // Modo edición: cargar datos existentes
         setFormData({
           name: initialData.name || '',
           description: initialData.description || '',
           sku: initialData.sku || '',
           brandName: initialData.brandName || '',
           price: initialData.price || 0,
-          parentCategoryName: initialData.parentCategoryName || '',
-          subCategoryName: initialData.subCategoryName || '',
-          options: initialData.options.map(opt => ({
-            size: opt.size, color: opt.color, material: opt.material,
-            sku: opt.sku, stock: opt.stock, minStock: opt.minStock
-          }))
+          parentCategoryName: initialData.category?.parent?.name || '',
+          subCategoryName: initialData.category?.name || '',
+          options: initialData.options && initialData.options.length > 0 
+            ? initialData.options.map((opt: ProductOption) => ({
+                size: opt.size || '',
+                color: opt.color || '',
+                material: opt.material || '',
+                sku: opt.sku || undefined,
+                stock: opt.stock || 0,
+                minStock: opt.minStock || 0
+              }))
+            : [{ size: '', color: '', material: '', sku: undefined, stock: 0, minStock: 0 }],
+          isActive: initialData.isActive
         });
       } else {
+        // Modo creación: resetear a valores vacíos
         setFormData({
-          name: '', description: '', sku: '', brandName: '', price: 0,
-          parentCategoryName: '', subCategoryName: '',
-          options: [{ size: '', color: '', material: '', sku: '', stock: 0, minStock: 0 }]
+          name: '',
+          description: '',
+          sku: '',
+          brandName: '',
+          price: 0,
+          parentCategoryName: '',
+          subCategoryName: '',
+          options: [{ size: '', color: '', material: '', sku: undefined, stock: 0, minStock: 0 }],
+          isActive: true
         });
       }
     }
@@ -93,26 +163,52 @@ export default function NewProductModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanPayload = {
-      ...formData,
-      price: Number(formData.price),
-      options: formData.options.map(opt => ({
-        ...opt,
-        stock: Number(opt.stock),
-        minStock: Number(opt.minStock)
-      }))
-    };
-    onSubmit(cleanPayload);
+    const cleanedData = cleanPayload(formData);
+    onSubmit(cleanedData);
+  };
+
+  const addVariant = () => {
+    setFormData(prev => ({
+      ...prev,
+      options: [...prev.options, { size: '', color: '', material: '', sku: undefined, stock: 0, minStock: 0 }]
+    }));
+  };
+
+  const removeVariant = (index: number) => {
+    if (formData.options.length > 1) {
+      setFormData(prev => ({
+        ...prev,
+        options: prev.options.filter((_, i) => i !== index)
+      }));
+    }
+  };
+
+  // Componente de Breadcrumbs dinámico
+  const Breadcrumbs = () => {
+    const isEdit = !!initialData;
+    return (
+      <div className="flex items-center text-sm text-slate-500 mb-2">
+        <Home className="w-4 h-4 mr-1" />
+        <span>Inicio</span>
+        <ChevronRight className="w-4 h-4 mx-1" />
+        <span>Productos</span>
+        <ChevronRight className="w-4 h-4 mx-1" />
+        <span className="font-medium text-slate-700">{isEdit ? 'Editar' : 'Nuevo'}</span>
+      </div>
+    );
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto bg-[#f8fafc] p-0 border-none">
+      <DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto bg-slate-50 p-0 border-none">
         <DialogHeader className="p-6 bg-white border-b sticky top-0 z-10">
+          <Breadcrumbs />
           <DialogTitle className="text-xl font-bold text-slate-800">
-            {initialData ? 'Editar Producto' : 'Crear Producto'}
+            {initialData ? 'Editar Producto' : 'Crear Nuevo Producto'}
           </DialogTitle>
-          <p className="text-sm text-slate-500">Completa la información para gestionar tu inventario.</p>
+          <p className="text-sm text-slate-500">
+            {initialData ? 'Modifica la información del producto y sus variantes.' : 'Completa la información para agregar un nuevo producto al inventario.'}
+          </p>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
@@ -136,16 +232,50 @@ export default function NewProductModal({
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-sm font-medium">Género / Categoría *</Label>
-                <Select value={formData.parentCategoryName} onValueChange={(v) => handleInputChange('parentCategoryName', v)}>
+                <Label className="text-sm font-medium">Género / Categoría Padre *</Label>
+                <Select value={formData.parentCategoryName} onValueChange={(v) => {
+                  handleInputChange('parentCategoryName', v);
+                  handleInputChange('subCategoryName', ''); // Reset subcategory when parent changes
+                }}>
                   <SelectTrigger className="bg-slate-50/50"><SelectValue placeholder="Selecciona un género" /></SelectTrigger>
-                  <SelectContent>{parentCategories.map((cat) => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent>
+                  <SelectContent>{parentCategories.filter(cat => cat && cat.trim() !== '').map((cat) => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent>
                 </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">Subcategoría *</Label>
+                <Input 
+                  placeholder="Ej: Running, Basketball, Casual" 
+                  value={formData.subCategoryName} 
+                  onChange={(e) => handleInputChange('subCategoryName', e.target.value)}
+                  disabled={!formData.parentCategoryName}
+                  required 
+                  className="bg-slate-50/50" 
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  {formData.parentCategoryName ? 
+                    `Si existe se usará, si no se creará automáticamente en "${formData.parentCategoryName}"` : 
+                    'Primero ingresa la categoría padre'
+                  }
+                </p>
               </div>
 
               <div className="space-y-1.5">
                 <Label className="text-sm font-medium">Marca *</Label>
                 <Input placeholder="Buscar marca..." value={formData.brandName} onChange={(e) => handleInputChange('brandName', e.target.value)} required className="bg-slate-50/50" />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">Estado</Label>
+                <Select value={formData.isActive?.toString() || 'true'} onValueChange={(v) => handleInputChange('isActive', v === 'true')}>
+                  <SelectTrigger className="bg-slate-50/50">
+                    <SelectValue placeholder="Selecciona estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Activo</SelectItem>
+                    <SelectItem value="false">Inactivo</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </div>
@@ -175,7 +305,7 @@ export default function NewProductModal({
                 <div className="p-2 bg-purple-50 rounded-lg"><Layers className="w-4 h-4 text-purple-600"/></div>
                 <h3 className="font-semibold text-slate-700">Opciones del Producto</h3>
               </div>
-              <Button type="button" variant="outline" size="sm" onClick={() => setFormData(prev => ({ ...prev, options: [...prev.options, { size: '', color: '', material: '', sku: '', stock: 0, minStock: 0 }] }))} className="text-xs border-dashed">
+              <Button type="button" variant="outline" size="sm" onClick={addVariant} className="text-xs border-dashed hover:bg-blue-50 hover:border-blue-300 transition-colors">
                 <Plus className="w-3 h-3 mr-1"/> Agregar Variante
               </Button>
             </div>
@@ -195,7 +325,11 @@ export default function NewProductModal({
                   </div>
                   <div className="space-y-1">
                     <Label className="text-[10px] uppercase text-slate-400 font-bold">Material</Label>
-                    <Input value={option.material} onChange={(e) => handleOptionChange(index, 'material', e.target.value)} className="h-8 text-sm" />
+                    <Input value={option.material || ''} onChange={(e) => handleOptionChange(index, 'material', e.target.value)} className="h-8 text-sm" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase text-slate-400 font-bold">SKU Específico</Label>
+                    <Input placeholder="SKU único (opcional)" value={option.sku || ''} onChange={(e) => handleOptionChange(index, 'sku', e.target.value)} className="h-8 text-sm" />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-[10px] uppercase text-slate-400 font-bold">Stock</Label>
@@ -206,7 +340,7 @@ export default function NewProductModal({
                     <Input type="number" value={option.minStock} onChange={(e) => handleOptionChange(index, 'minStock', e.target.value)} className="h-8 text-sm" />
                   </div>
                   <div className="flex items-end justify-center pb-1">
-                    <Button type="button" variant="ghost" size="icon" onClick={() => setFormData(prev => ({ ...prev, options: prev.options.filter((_, i) => i !== index) }))} disabled={formData.options.length === 1} className="h-8 w-8 text-slate-400 hover:text-red-500">
+                    <Button type="button" variant="ghost" size="icon" onClick={() => removeVariant(index)} disabled={formData.options.length === 1} className="h-8 w-8 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors">
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
@@ -217,11 +351,26 @@ export default function NewProductModal({
 
           {/* BOTONES DE ACCIÓN */}
           <div className="flex justify-end gap-3 pt-4">
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="text-slate-500">
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors">
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading} className="bg-[#0f172a] hover:bg-[#1e293b] text-white px-8 rounded-lg shadow-lg shadow-slate-200">
-              {loading ? 'Guardando...' : (initialData ? 'Actualizar Producto' : 'Crear Producto con Variantes')}
+            <Button 
+              type="submit" 
+              disabled={loading} 
+              className={`${
+                initialData 
+                  ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-200' 
+                  : 'bg-slate-900 hover:bg-slate-800 shadow-slate-200'
+              } text-white px-8 rounded-lg shadow-lg transition-all duration-200 hover:shadow-xl`}
+            >
+              {loading ? (
+                <span className="flex items-center">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                  {initialData ? 'Actualizando...' : 'Creando...'}
+                </span>
+              ) : (
+                initialData ? 'Guardar Cambios' : 'Crear Producto'
+              )}
             </Button>
           </div>
         </form>
