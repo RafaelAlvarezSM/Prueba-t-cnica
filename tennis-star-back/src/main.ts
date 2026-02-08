@@ -31,7 +31,7 @@ async function bootstrap() {
     
   const document = SwaggerModule.createDocument(app, config);
   // Ruta donde se verá la documentación: http://localhost:3001/api
-  SwaggerModule.setup('api', app, document);
+  SwaggerModule.setup('/', app, document);
 
   app.useGlobalPipes(new ValidationPipe({
   whitelist: true,       // Elimina campos que no estén en el DTO
