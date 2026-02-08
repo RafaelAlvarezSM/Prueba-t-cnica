@@ -8,16 +8,18 @@ import { CategoryResponseDto } from './dto/category-response.dto';
 export class CategoriesService {
   constructor(private prisma: PrismaService) { }
 
+
   async create(createCategoryDto: CreateCategoryDto) {
     const { parentId, ...categoryData } = createCategoryDto;
-
-    // Verificar si el nombre ya existe
-    const existingCategory = await this.prisma.category.findUnique({
-      where: { name: categoryData.name },
+    const existingCategory = await this.prisma.category.findFirst({
+      where: {
+        name: categoryData.name,
+        parentId: parentId || null // Buscamos en el mismo nivel
+      },
     });
 
     if (existingCategory) {
-      throw new ConflictException('El nombre de la categoría ya existe');
+      throw new ConflictException('El nombre de la categoría ya existe en este nivel');
     }
 
     // Si hay parentId, verificar que exista
@@ -43,6 +45,7 @@ export class CategoriesService {
             name: true,
           },
         },
+
         _count: {
           select: {
             children: true,
@@ -273,6 +276,7 @@ export class CategoriesService {
             name: true,
           },
         },
+  
         _count: {
           select: {
             children: true,
@@ -303,14 +307,14 @@ export class CategoriesService {
 
     // Verificar que no tenga productos o subcategorías activas
     if (category._count.children > 0 || category._count.products > 0) {
+
       throw new ConflictException(
         'No se puede desactivar la categoría porque tiene productos o subcategorías asociadas'
       );
     }
 
     // Soft delete
-    await this.prisma.category.delete({where: { id } });
-
+    await this.prisma.category.delete({ where: { id } });
     return { message: 'Categoría eliminada exitosamente' };
   }
 
@@ -327,6 +331,7 @@ export class CategoriesService {
       subcategoriesCount: category._count?.children || 0,
       createdAt: category.createdAt,
       updatedAt: category.updatedAt,
+
     };
   }
 }

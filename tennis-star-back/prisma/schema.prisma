@@ -71,7 +71,7 @@ model User {
 // Categorías con jerarquía
 model Category {
   id           String    @id @default(cuid())
-  name         String    @unique
+  name         String    
   description  String?
   position     Int       @default(0)
   isActive     Boolean   @default(true)
